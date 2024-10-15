@@ -1,6 +1,6 @@
 import heapq
 from tabulate import tabulate
-from dbwrapper import load_orders_from_db, save_order_to_db, update_order_in_db
+from dbwrapper import load_orders_from_db, save_order_to_db, update_order_in_db, delete_order_from_db
 import asyncio
 
 class Order:
@@ -41,16 +41,33 @@ class OrderBook:
         print(f"Added {order}")
 
         # Broadcast the new order via WebSocket
-        await self.broadcast_order(order)
+        await self.broadcast_update(f"New order added: {order}")
 
-    async def broadcast_order(self, order):
+    async def cancel_order(self, order_id):
+        if order_id in self.order_map:
+            order = self.order_map.pop(order_id)
+            if order.side == 'buy':
+                self.bids = [o for o in self.bids if o.order_id != order_id]
+                heapq.heapify(self.bids)
+            else:
+                self.asks = [o for o in self.asks if o.order_id != order_id]
+                heapq.heapify(self.asks)
+
+            # Remove order from database
+            delete_order_from_db(order_id)
+
+            print(f"Cancelled {order}")
+            await self.broadcast_update(f"Order cancelled: {order}")
+        else:
+            print(f"Order with ID {order_id} not found.")
+
+    async def broadcast_update(self, message):
         if self.websocket_server:
-            message = f"New order added: {order}"
             await self.websocket_server.broadcast(message)
         else:
             print("WebSocket server not initialized.")
 
-    def match_orders(self):
+    async def match_orders(self):
         while self.bids and self.asks and self.bids[0].price >= self.asks[0].price:
             highest_bid = heapq.heappop(self.bids)
             lowest_ask = heapq.heappop(self.asks)
@@ -60,13 +77,16 @@ class OrderBook:
                 self.filled_orders_log.append(f"Filled {lowest_ask} with {highest_bid}")
                 heapq.heappush(self.bids, highest_bid)
                 update_order_in_db(highest_bid)  # Update the remaining quantity
+                await self.broadcast_update(f"Filled {lowest_ask} with {highest_bid}")
             elif highest_bid.quantity < lowest_ask.quantity:
                 lowest_ask.quantity -= highest_bid.quantity
                 self.filled_orders_log.append(f"Filled {highest_bid} with {lowest_ask}")
                 heapq.heappush(self.asks, lowest_ask)
                 update_order_in_db(lowest_ask)
+                await self.broadcast_update(f"Filled {highest_bid} with {lowest_ask}")
             else:
                 self.filled_orders_log.append(f"Fully filled {highest_bid} with {lowest_ask}")
+                await self.broadcast_update(f"Fully filled {highest_bid} with {lowest_ask}")
 
             if highest_bid.quantity == 0:
                 update_order_in_db(highest_bid)
@@ -84,21 +104,29 @@ class OrderBook:
                 heapq.heappush(self.asks, order)
             self.order_map[order_id] = order
         print(f"Restored {len(orders)} orders from the database.")
+        #await self.broadcast_update(f"Restored {len(orders)} orders from the database.")
 
-    def show_order_book(self):
+    async def show_order_book(self):
         asks_table = [[ask.order_id, ask.price, ask.quantity] for ask in sorted(self.asks, key=lambda o: o.price)]
         bids_table = [[bid.order_id, bid.price, bid.quantity] for bid in sorted(self.bids, key=lambda o: -o.price)]
 
+        asks_output = tabulate(asks_table, headers=["Order ID", "Price", "Quantity"], tablefmt="grid")
+        bids_output = tabulate(bids_table, headers=["Order ID", "Price", "Quantity"], tablefmt="grid")
+
         print("Current Asks:")
-        print(tabulate(asks_table, headers=["Order ID", "Price", "Quantity"], tablefmt="grid"))
+        print(asks_output)
         print("Current Bids:")
-        print(tabulate(bids_table, headers=["Order ID", "Price", "Quantity"], tablefmt="grid"))
+        print(bids_output)
+
+        await self.broadcast_update(f"Current Asks:\n{asks_output}")
+        await self.broadcast_update(f"Current Bids:\n{bids_output}")
 
         print("\nFilled Orders Log:")
         for log in self.filled_orders_log:
             print(log)
+            await self.broadcast_update(log)
 
-    def show_price_summary(self):
+    async def show_price_summary(self):
         ask_summary = {}
         bid_summary = {}
 
@@ -117,9 +145,14 @@ class OrderBook:
         ask_rows = [[price, total_quantity] for price, total_quantity in sorted(ask_summary.items(), reverse=True)]
         bid_rows = [[price, total_quantity] for price, total_quantity in sorted(bid_summary.items(), reverse=True)]
 
+        ask_summary_output = tabulate(ask_rows, headers=["Price", "Total Quantity"], tablefmt="grid")
+        bid_summary_output = tabulate(bid_rows, headers=["Price", "Total Quantity"], tablefmt="grid")
+
         print("\nORDER BOOK SUMMARY")
         print("Asks (Sell Orders):")
-        print(tabulate(ask_rows, headers=["Price", "Total Quantity"], tablefmt="grid"))
-
+        print(ask_summary_output)
         print("\nBids (Buy Orders):")
-        print(tabulate(bid_rows, headers=["Price", "Total Quantity"], tablefmt="grid"))
+        print(bid_summary_output)
+
+        await self.broadcast_update(f"\nORDER BOOK SUMMARY\nAsks (Sell Orders):\n{ask_summary_output}")
+        await self.broadcast_update(f"\nBids (Buy Orders):\n{bid_summary_output}")

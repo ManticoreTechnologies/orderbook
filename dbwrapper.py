@@ -39,3 +39,9 @@ def load_orders_from_db():
     """Load active orders from the database."""
     query = "SELECT order_id, price, quantity, side FROM orders WHERE status = 'active'"
     return conn.execute(query).fetchall()
+
+def delete_order_from_db(order_id):
+    """Delete an order from the database by order_id."""
+    query = "DELETE FROM orders WHERE order_id = ?"
+    conn.execute(query, (order_id,))
+    conn.commit()

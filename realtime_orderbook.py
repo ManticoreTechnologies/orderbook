@@ -12,6 +12,9 @@ def generate_random_order():
     order_id = str(uuid.uuid4())
     return Order(order_id, price, quantity, order_type)
 
+def should_cancel_order():
+    return random.random() < 0.1  # 10% chance to cancel an order
+
 async def simulate_realtime_orderbook():
     # Initialize WebSocket server (replace with your actual WebSocket server setup)
     websocket_server = WebSocketServer(port=8765)  # Replace port with the one you need
@@ -29,8 +32,13 @@ async def simulate_realtime_orderbook():
             # Add the order to the order book
             await order_book.add_order(new_order)
 
+            # Randomly cancel an order
+            if should_cancel_order() and order_book.order_map:
+                order_id_to_cancel = random.choice(list(order_book.order_map.keys()))
+                await order_book.cancel_order(order_id_to_cancel)
+
             # Attempt to match orders
-            order_book.match_orders()
+            await order_book.match_orders()
 
             # Show the current state of the order book
             #order_book.show_order_book()
