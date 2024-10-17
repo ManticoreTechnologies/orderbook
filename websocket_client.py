@@ -1,6 +1,7 @@
 import asyncio
 import websockets
 
+
 async def listen_to_orderbook():
     uri = "ws://localhost:8765"
     async with websockets.connect(uri) as websocket:

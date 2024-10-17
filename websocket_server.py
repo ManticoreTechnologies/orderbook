@@ -3,12 +3,13 @@ import websockets
 import threading
 
 class WebSocketServer:
-    def __init__(self, host='localhost', port=8765):
+    def __init__(self, host='localhost', port=8765, message_callback=None):
         self.host = host
         self.port = port
         self.clients = set()
         self.server = None
         self.loop = asyncio.new_event_loop()
+        self.message_callback = message_callback  # Add a callback parameter
 
     async def handler(self, websocket, path):
         # Register client
@@ -16,6 +17,12 @@ class WebSocketServer:
         try:
             while True:
                 message = await websocket.recv()  # Receive a message from the client
+                print(f"Received message: {message}")
+                
+                # Call the callback function if it's provided
+                if self.message_callback:
+                    await self.message_callback(message)
+                
                 # Echo received message (you could handle incoming messages differently here)
                 await self.broadcast(message)
         except websockets.ConnectionClosed:
