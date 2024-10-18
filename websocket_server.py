@@ -37,7 +37,16 @@ class WebSocketServer:
     async def broadcast(self, message):
         # Broadcast a message to all connected clients
         if self.clients:
-            await asyncio.gather(*[client.send(message) for client in self.clients if client.open])
+            disconnected_clients = []
+            for client in self.clients:
+                if client.open:
+                    try:
+                        await client.send(message)
+                    except websockets.ConnectionClosed:
+                        disconnected_clients.append(client)
+            # Remove disconnected clients after the iteration
+            for client in disconnected_clients:
+                self.clients.remove(client)
 
     def start(self):
         # Start the WebSocket server

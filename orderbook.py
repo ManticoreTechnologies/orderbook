@@ -73,7 +73,12 @@ class OrderBook:
             lowest_ask = heapq.heappop(self.asks)
 
             matched_quantity = min(highest_bid.quantity, lowest_ask.quantity)
-            matched_price = (highest_bid.price + lowest_ask.price) / 2  # Example: average price
+
+            # Determine the matched price based on the order that was already in the book
+            if highest_bid.quantity <= lowest_ask.quantity:
+                matched_price = lowest_ask.price  # Use the price of the ask
+            else:
+                matched_price = highest_bid.price  # Use the price of the bid
 
             # Save ticker information
             save_ticker_to_db({'price': matched_price, 'quantity': matched_quantity})
