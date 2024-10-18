@@ -19,6 +19,17 @@ conn.execute('''CREATE TABLE IF NOT EXISTS orders (
 conn.commit()
 conn.close()
 
+# Create tickers table if not exists
+conn = get_connection()
+conn.execute('''CREATE TABLE IF NOT EXISTS tickers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    price REAL NOT NULL,
+    quantity INTEGER NOT NULL
+);''')
+conn.commit()
+conn.close()
+
 def current_timestamp():
     return datetime.now().isoformat()
 
@@ -54,5 +65,14 @@ def delete_order_from_db(order_id):
     conn = get_connection()
     query = "DELETE FROM orders WHERE order_id = ?"
     conn.execute(query, (order_id,))
+    conn.commit()
+    conn.close()
+
+def save_ticker_to_db(ticker_data):
+    """Save ticker information to the database."""
+    conn = get_connection()
+    query = """INSERT INTO tickers (timestamp, price, quantity) VALUES (?, ?, ?)"""
+    values = (current_timestamp(), ticker_data['price'], ticker_data['quantity'])
+    conn.execute(query, values)
     conn.commit()
     conn.close()

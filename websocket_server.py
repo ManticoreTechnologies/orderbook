@@ -15,13 +15,16 @@ class WebSocketServer:
         # Register client
         self.clients.add(websocket)
         try:
+
             while True:
                 message = await websocket.recv()  # Receive a message from the client
                 print(f"Received message: {message}")
                 
                 # Call the callback function if it's provided
                 if self.message_callback:
-                    await self.message_callback(message)
+                    response = await self.message_callback(message)
+                    if response:
+                        await websocket.send(response)
                 
                 # Echo received message (you could handle incoming messages differently here)
                 await self.broadcast(message)

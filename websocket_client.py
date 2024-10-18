@@ -4,14 +4,16 @@ import websockets
 
 async def listen_to_orderbook():
     uri = "ws://localhost:8765"
-    async with websockets.connect(uri) as websocket:
-        print("Connected to the WebSocket server.")
+    while True:
         try:
-            while True:
-                message = await websocket.recv()
-                print(f"Received message: {message}")
-        except websockets.exceptions.ConnectionClosed:
-            print("WebSocket connection closed.")
+            async with websockets.connect(uri, timeout=10) as websocket:  # Set timeout to 10 seconds
+                print("Connected to the WebSocket server.")
+                while True:
+                    message = await websocket.recv()
+                    print(f"Received message: {message}")
+        except (websockets.ConnectionClosed, asyncio.CancelledError):
+            print("WebSocket connection closed. Reconnecting...")
+            await asyncio.sleep(1)  # Wait a bit before reconnecting
 
 if __name__ == "__main__":
     try:

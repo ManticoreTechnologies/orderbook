@@ -2,6 +2,7 @@ import asyncio
 import time
 import random
 import uuid
+import json
 from orderbook import OrderBook, Order
 from websocket_server import WebSocketServer  # Assuming you have a WebSocket server setup
 
@@ -16,8 +17,18 @@ def should_cancel_order():
     return random.random() < 0.1  # 10% chance to cancel an order
 
 async def process_message(message, order_book):
-    # Example message: "Place Order: buy 5 @ 100"
     try:
+        if message == "get_latest_ticker":
+            return "Latest Ticker: " + order_book.get_latest_ticker()
+        
+        if message == "get_tickers":
+            tickers = order_book.get_ticker_history()
+            return "Tickers: " + json.dumps([{
+                "timestamp": ticker[0],
+                "price": ticker[1],
+                "quantity": ticker[2]
+            } for ticker in tickers])  # Convert to JSON for easy transmission
+        
         if message.startswith("Place Order:"):
             _, order_details = message.split(":", 1)
             side, qty_price = order_details.strip().split(" ", 1)
@@ -47,7 +58,7 @@ async def simulate_realtime_orderbook():
             # Generate a random order
 
             # Add the order to the order book
-            if random.random() < 0.1: # Add order every 25 seconds
+            if random.random() < 0.5: # Add order every 25 seconds
                 new_order = generate_random_order()
                 await order_book.add_order(new_order)
                 print(f"New order: {new_order}")

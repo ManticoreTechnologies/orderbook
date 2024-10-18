@@ -1,7 +1,7 @@
 import heapq
 import json
 from tabulate import tabulate
-from dbwrapper import load_orders_from_db, save_order_to_db, update_order_in_db, delete_order_from_db
+from dbwrapper import get_connection, load_orders_from_db, save_order_to_db, save_ticker_to_db, update_order_in_db, delete_order_from_db
 
 class Order:
     def __init__(self, order_id, price, quantity, side):
@@ -72,6 +72,12 @@ class OrderBook:
             highest_bid = heapq.heappop(self.bids)
             lowest_ask = heapq.heappop(self.asks)
 
+            matched_quantity = min(highest_bid.quantity, lowest_ask.quantity)
+            matched_price = (highest_bid.price + lowest_ask.price) / 2  # Example: average price
+
+            # Save ticker information
+            save_ticker_to_db({'price': matched_price, 'quantity': matched_quantity})
+
             if highest_bid.quantity > lowest_ask.quantity:
                 highest_bid.quantity -= lowest_ask.quantity
                 self.filled_orders_log.append(f"Filled: {lowest_ask,highest_bid}")
@@ -97,6 +103,7 @@ class OrderBook:
         """Restore active orders from the database on startup."""
         orders = load_orders_from_db()
         for order_id, price, quantity, side in orders:
+            print(f"Loading order: {order_id}, {price}, {quantity}, {side}")  # Debug print
             order = Order(order_id=order_id, price=price, quantity=quantity, side=side)
             if side == 'buy':
                 heapq.heappush(self.bids, order)
@@ -156,3 +163,21 @@ class OrderBook:
 
         await self.broadcast_update(f"\nORDER BOOK SUMMARY\nAsks (Sell Orders):\n{ask_summary_output}")
         await self.broadcast_update(f"\nBids (Buy Orders):\n{bid_summary_output}")
+
+    def get_latest_ticker(self):
+        """Retrieve the latest ticker information."""
+        conn = get_connection()
+        query = "SELECT timestamp, price, quantity FROM tickers ORDER BY id DESC LIMIT 1"
+        ticker = conn.execute(query).fetchone()
+        conn.close()
+        if ticker:
+            return f"Latest Ticker: Time: {ticker[0]}, Price: {ticker[1]}, Quantity: {ticker[2]}"
+        return "No ticker data available."
+
+    def get_ticker_history(self):
+        """Retrieve the ticker history in ascending order by timestamp."""
+        conn = get_connection()
+        query = "SELECT timestamp, price, quantity FROM tickers ORDER BY timestamp ASC"
+        tickers = conn.execute(query).fetchall()
+        conn.close()
+        return tickers
