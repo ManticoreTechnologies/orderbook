@@ -38,7 +38,7 @@ class WebSocketServer:
         # Broadcast a message to all connected clients
         if self.clients:
             disconnected_clients = []
-            for client in self.clients:
+            for client in list(self.clients):  # Iterate over a copy of the set
                 if client.open:
                     try:
                         await client.send(message)
@@ -46,7 +46,11 @@ class WebSocketServer:
                         disconnected_clients.append(client)
             # Remove disconnected clients after the iteration
             for client in disconnected_clients:
-                self.clients.remove(client)
+                if client in self.clients:  # Check if the client is still in the set
+                    try:
+                        self.clients.remove(client)
+                    except KeyError:
+                        pass
 
     def start(self):
         # Start the WebSocket server

@@ -2,13 +2,15 @@ import heapq
 import json
 from tabulate import tabulate
 from dbwrapper import get_connection, load_orders_from_db, save_order_to_db, save_ticker_to_db, update_order_in_db, delete_order_from_db
+from datetime import datetime
 
 class Order:
-    def __init__(self, order_id, price, quantity, side):
+    def __init__(self, order_id, price, quantity, side, timestamp=None):
         self.order_id = order_id
         self.price = price
         self.quantity = quantity
         self.side = side
+        self.timestamp = timestamp or datetime.now()
 
     def __lt__(self, other):
         if self.side == 'sell':
@@ -17,7 +19,7 @@ class Order:
             return self.price > other.price
 
     def __repr__(self):
-        return f'Order({self.side}, id={self.order_id}, price={self.price}, qty={self.quantity})'
+        return f'Order({self.side}, id={self.order_id}, price={self.price}, qty={self.quantity}, time={self.timestamp})'
 
 class OrderBook:
     def __init__(self, websocket_server=None):
@@ -68,41 +70,49 @@ class OrderBook:
             print("WebSocket server not initialized.")
 
     async def match_orders(self):
+        ticker_price = None
+        total_matched_quantity = 0  # Track total matched quantity for this call
+        
         while self.bids and self.asks and self.bids[0].price >= self.asks[0].price:
             highest_bid = heapq.heappop(self.bids)
             lowest_ask = heapq.heappop(self.asks)
 
             matched_quantity = min(highest_bid.quantity, lowest_ask.quantity)
+            total_matched_quantity += matched_quantity  # Accumulate matched quantity
 
-            # Determine the matched price based on the order that was already in the book
-            if highest_bid.quantity <= lowest_ask.quantity:
-                matched_price = lowest_ask.price  # Use the price of the ask
+            # Determine the transaction price based on order timestamps
+            if highest_bid.timestamp <= lowest_ask.timestamp:
+                transaction_price = highest_bid.price
             else:
-                matched_price = highest_bid.price  # Use the price of the bid
-
-            # Save ticker information
-            save_ticker_to_db({'price': matched_price, 'quantity': matched_quantity})
+                transaction_price = lowest_ask.price
 
             if highest_bid.quantity > lowest_ask.quantity:
                 highest_bid.quantity -= lowest_ask.quantity
-                self.filled_orders_log.append(f"Filled: {lowest_ask,highest_bid}")
+                self.filled_orders_log.append(f"Filled: {lowest_ask, highest_bid}")
                 heapq.heappush(self.bids, highest_bid)
                 update_order_in_db(highest_bid)  # Update the remaining quantity
-                await self.broadcast_update(f"Filled: {lowest_ask,highest_bid}")
+                await self.broadcast_update(f"Filled: {lowest_ask, highest_bid}")
             elif highest_bid.quantity < lowest_ask.quantity:
                 lowest_ask.quantity -= highest_bid.quantity
-                self.filled_orders_log.append(f"Filled:{[highest_bid,lowest_ask]}")
+                self.filled_orders_log.append(f"Filled: {[highest_bid, lowest_ask]}")
                 heapq.heappush(self.asks, lowest_ask)
                 update_order_in_db(lowest_ask)
-                await self.broadcast_update(f"Filled: {[highest_bid,lowest_ask]}")
+                await self.broadcast_update(f"Filled: {[highest_bid, lowest_ask]}")
             else:
-                self.filled_orders_log.append(f"Fullfilled: {highest_bid,lowest_ask}")
-                await self.broadcast_update(f"Filled: {highest_bid,lowest_ask}")
+                self.filled_orders_log.append(f"Fulfilled: {highest_bid, lowest_ask}")
+                await self.broadcast_update(f"Filled: {highest_bid, lowest_ask}")
+
+            # Update the ticker price to the transaction price
+            ticker_price = transaction_price
 
             if highest_bid.quantity == 0:
                 update_order_in_db(highest_bid)
             if lowest_ask.quantity == 0:
                 update_order_in_db(lowest_ask)
+
+        # Save the ticker to the database once after all matches
+        if total_matched_quantity > 0 and ticker_price is not None:
+            save_ticker_to_db({'price': ticker_price, 'quantity': total_matched_quantity})
 
     def load_orders(self):
         """Restore active orders from the database on startup."""

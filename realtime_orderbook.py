@@ -36,8 +36,15 @@ async def process_message(message, order_book):
             order_id = str(uuid.uuid4())
             new_order = Order(order_id, price, quantity, side)
             await order_book.add_order(new_order)
+            await order_book.match_orders()
             print(f"Order placed: {new_order}")
-            return order_id
+            
+            return f"Order ID: {order_id}"  # Return the order ID to the client
+        if message.startswith("Cancel Order:"):
+            _, order_id = message.split(":", 1)
+            await order_book.cancel_order(order_id)
+            print(f"Order cancelled: {order_id}")
+            return f"Cancelled Order ID: {order_id}"  # Return the order ID to the client
     except Exception as e:
         print(f"Failed to process message: {message}, error: {e}")
     return None
