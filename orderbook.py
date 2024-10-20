@@ -1,15 +1,17 @@
 import heapq
 import json
 from tabulate import tabulate
-from dbwrapper import get_connection, load_orders_from_db, save_order_to_db, save_ticker_to_db, update_order_in_db, delete_order_from_db
+from dbwrapper import get_connection, load_orders_from_db, save_order_to_db, save_ticker_to_db, update_order_in_db, delete_order_from_db, current_timestamp, load_accounts_from_db, save_account_to_db, load_account_from_db
 from datetime import datetime
+from account import Account
 
 class Order:
-    def __init__(self, order_id, price, quantity, side, timestamp=None):
+    def __init__(self, order_id, price, quantity, side, user_id, timestamp=None):
         self.order_id = order_id
         self.price = price
         self.quantity = quantity
         self.side = side
+        self.user_id = user_id
         self.timestamp = timestamp or datetime.now()
 
     def __lt__(self, other):
@@ -19,7 +21,7 @@ class Order:
             return self.price > other.price
 
     def __repr__(self):
-        return f'Order({self.side}, id={self.order_id}, price={self.price}, qty={self.quantity}, time={self.timestamp})'
+        return f'Order({self.side}, id={self.order_id}, price={self.price}, qty={self.quantity}, time={self.timestamp}, user_id={self.user_id})'
 
 class OrderBook:
     def __init__(self, websocket_server=None):
@@ -27,22 +29,40 @@ class OrderBook:
         self.asks = []  # Min-heap for asks
         self.order_map = {}  # To keep track of all active orders by order_id
         self.filled_orders_log = []
+        self.accounts = {}  # To keep track of all accounts by user_id
         self.load_orders()  # Load active orders from the database
+        self.load_accounts()  # Load accounts from the database
         self.websocket_server = websocket_server  # Assign WebSocket server instance
 
     async def add_order(self, order):
+        # Retrieve account details from the database
+        account_data = load_account_from_db(order.user_id)
+        if account_data:
+            user_id, username, balance = account_data
+            account = Account(user_id, username, balance)
+        else:
+            raise ValueError(f"Account with user_id {order.user_id} not found.")
+
+        order_cost = order.price * order.quantity
+
+        if order.side == 'buy' and account.balance >= order_cost:
+            account.update_balance(-order_cost)
+            account.update_on_hold_balance(order_cost)
+        elif order.side == 'sell':
+            # Assuming the user has the quantity to sell
+            pass
+        else:
+            print(f"Insufficient balance for user {order.user_id} to place order {order}")
+            return
+
         if order.side == 'buy':
             heapq.heappush(self.bids, order)
         else:
             heapq.heappush(self.asks, order)
 
-        # Save order to database
         save_order_to_db(order)
-
         self.order_map[order.order_id] = order
         print(f"Added {order}")
-
-        # Broadcast the new order via WebSocket
         await self.broadcast_update(f"New order added: {order}")
 
     async def cancel_order(self, order_id):
@@ -86,6 +106,23 @@ class OrderBook:
             else:
                 transaction_price = lowest_ask.price
 
+            # Record the trade in the trade history
+            conn = get_connection()
+            trade_query = """INSERT INTO trade_history (user_id, order_id, price, quantity, timestamp)
+                             VALUES (?, ?, ?, ?, ?)"""
+            conn.execute(trade_query, (highest_bid.user_id, highest_bid.order_id, transaction_price, matched_quantity, current_timestamp()))
+            conn.execute(trade_query, (lowest_ask.user_id, lowest_ask.order_id, transaction_price, matched_quantity, current_timestamp()))
+            conn.commit()
+            conn.close()
+
+            # Update account balances
+            highest_bid_account = self.accounts.get(highest_bid.user_id)
+            lowest_ask_account = self.accounts.get(lowest_ask.user_id)
+
+            if highest_bid_account and lowest_ask_account:
+                highest_bid_account.update_on_hold_balance(-transaction_price * matched_quantity)
+                lowest_ask_account.update_balance(transaction_price * matched_quantity)
+
             if highest_bid.quantity > lowest_ask.quantity:
                 highest_bid.quantity -= lowest_ask.quantity
                 self.filled_orders_log.append(f"Filled: {lowest_ask, highest_bid}")
@@ -117,16 +154,17 @@ class OrderBook:
     def load_orders(self):
         """Restore active orders from the database on startup."""
         orders = load_orders_from_db()
-        for order_id, price, quantity, side in orders:
-            print(f"Loading order: {order_id}, {price}, {quantity}, {side}")  # Debug print
-            order = Order(order_id=order_id, price=price, quantity=quantity, side=side)
+        for order_id, user_id, price, quantity, side in orders:
+            print(f"Loading order: {order_id}, {price}, {quantity}, {side}, {user_id}")  # Debug print
+            order = Order(order_id=order_id, price=price, quantity=quantity, side=side, user_id=user_id)
             if side == 'buy':
                 heapq.heappush(self.bids, order)
             else:
                 heapq.heappush(self.asks, order)
             self.order_map[order_id] = order
         print(f"Restored {len(orders)} orders from the database.")
-        #await self.broadcast_update(f"Restored {len(orders)} orders from the database.")
+        # Uncomment the line below if you want to broadcast the restored orders
+        # await self.broadcast_update(f"Restored {len(orders)} orders from the database.")
 
     async def show_order_book(self):
         asks_table = [[ask.order_id, ask.price, ask.quantity] for ask in sorted(self.asks, key=lambda o: o.price)]
@@ -196,3 +234,29 @@ class OrderBook:
         tickers = conn.execute(query).fetchall()
         conn.close()
         return tickers
+
+    def update_user_balance(self, user_id, amount):
+        conn = get_connection()
+        query = "UPDATE users SET balance = balance + ? WHERE user_id = ?"
+        conn.execute(query, (amount, user_id))
+        conn.commit()
+        conn.close()
+
+    def get_trade_history(self, user_id):
+        conn = get_connection()
+        query = "SELECT * FROM trade_history WHERE user_id = ? ORDER BY timestamp ASC"
+        trades = conn.execute(query, (user_id,)).fetchall()
+        conn.close()
+        return trades
+
+    def load_accounts(self):
+        """Restore accounts from the database on startup."""
+        accounts = load_accounts_from_db()
+        for user_id, username, balance in accounts:
+            self.accounts[user_id] = Account(user_id, username, balance)
+        print(f"Restored {len(accounts)} accounts from the database.")
+
+    def save_account(self, account):
+        """Save an account to the database."""
+        save_account_to_db(account)
+        print(f"Saved account: {account}")

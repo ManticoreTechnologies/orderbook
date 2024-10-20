@@ -3,6 +3,7 @@ import time
 import random
 import uuid
 import json
+from dbwrapper import register_account
 from orderbook import OrderBook, Order
 from websocket_server import WebSocketServer  # Assuming you have a WebSocket server setup
 
@@ -11,13 +12,20 @@ def generate_random_order():
     price = random.randint(95, 105)
     quantity = random.randint(1, 10)
     order_id = str(uuid.uuid4())
-    return Order(order_id, price, quantity, order_type)
+    user_id = random.choice(['user1', 'user2'])  # Example user IDs
+    return Order(order_id, price, quantity, order_type, user_id)
 
 def should_cancel_order():
     return random.random() < 0.1  # 10% chance to cancel an order
 
 async def process_message(message, order_book):
     try:
+        if message.startswith("Register Account:"):
+            _, account_details = message.split(":", 1)
+            user_id, username, password = account_details.strip().split(",")
+            register_account(user_id, username, password)
+            return f"Account registered for user_id: {user_id}"
+        
         if message == "get_latest_ticker":
             return "Latest Ticker: " + order_book.get_latest_ticker()
         
@@ -36,7 +44,7 @@ async def process_message(message, order_book):
             order_id = str(uuid.uuid4())
             new_order = Order(order_id, price, quantity, side)
             await order_book.add_order(new_order)
-            await order_book.match_orders()
+            #await order_book.match_orders()
             print(f"Order placed: {new_order}")
             
             return f"Order ID: {order_id}"  # Return the order ID to the client
@@ -45,11 +53,18 @@ async def process_message(message, order_book):
             await order_book.cancel_order(order_id)
             print(f"Order cancelled: {order_id}")
             return f"Cancelled Order ID: {order_id}"  # Return the order ID to the client
+        if message.startswith("Get Trade History:"):
+            _, user_id = message.split(":", 1)
+            trades = order_book.get_trade_history(user_id)
+            return "Trade History: " + json.dumps(trades)
     except Exception as e:
         print(f"Failed to process message: {message}, error: {e}")
     return None
 
 async def simulate_realtime_orderbook():
+    # Register users for the simulation
+    register_simulation_users()
+
     # Initialize WebSocket server with a message callback
     websocket_server = WebSocketServer(
         port=8765,
@@ -90,6 +105,15 @@ async def simulate_realtime_orderbook():
     except KeyboardInterrupt:
         print("Simulation stopped.")
         websocket_server.stop()  # Ensure you stop the WebSocket server properly
+
+def register_simulation_users():
+    users = [
+        {"user_id": "user1", "username": "User One", "password": "password1", "balance": 1000000.0},
+        {"user_id": "user2", "username": "User Two", "password": "password2", "balance": 1000000.0}
+    ]
+    for user in users:
+        register_account(user["user_id"], user["username"], user["password"], user["balance"])
+        print(f"Registered user: {user['user_id']} with balance: {user['balance']}")
 
 if __name__ == "__main__":
     asyncio.run(simulate_realtime_orderbook())
