@@ -20,6 +20,8 @@ def should_cancel_order():
 
 async def process_message(message, order_book):
     try:
+        print(f"Received message: {message}")  # Log received message
+
         if message.startswith("Register Account:"):
             _, account_details = message.split(":", 1)
             user_id, username, password = account_details.strip().split(",")
@@ -35,28 +37,45 @@ async def process_message(message, order_book):
                 "timestamp": ticker[0],
                 "price": ticker[1],
                 "quantity": ticker[2]
-            } for ticker in tickers])  # Convert to JSON for easy transmission
+            } for ticker in tickers])
         
         if message.startswith("Place Order:"):
             _, order_details = message.split(":", 1)
-            side, qty_price = order_details.strip().split(" ", 1)
-            quantity, price = map(int, qty_price.split(" @ "))
+            try:
+                parts = order_details.strip().split(" ", 2)
+                if len(parts) != 3:
+                    raise ValueError("Order details do not have the expected number of parts.")
+                
+                side, qty_price_user = parts[0], parts[1] + " " + parts[2]
+                quantity, price_user = qty_price_user.split(" @ ")
+                price, user_id = price_user.split(" by ")
+                
+                quantity = int(quantity)
+                price = int(price)
+                
+            except ValueError as e:
+                print(f"Error parsing order details: {order_details}, error: {e}")
+                return "Invalid order format. Please use 'Place Order: <side> <quantity> @ <price> by <user_id>'."
+
             order_id = str(uuid.uuid4())
-            new_order = Order(order_id, price, quantity, side)
+            new_order = Order(order_id, price, quantity, side, user_id)
             await order_book.add_order(new_order)
-            #await order_book.match_orders()
             print(f"Order placed: {new_order}")
             
-            return f"Order ID: {order_id}"  # Return the order ID to the client
+            return f"Order ID: {order_id}"
+
         if message.startswith("Cancel Order:"):
+            print("Received cancel order message")
             _, order_id = message.split(":", 1)
             await order_book.cancel_order(order_id)
             print(f"Order cancelled: {order_id}")
-            return f"Cancelled Order ID: {order_id}"  # Return the order ID to the client
+            return f"Cancelled Order ID: {order_id}"
+
         if message.startswith("Get Trade History:"):
             _, user_id = message.split(":", 1)
             trades = order_book.get_trade_history(user_id)
             return "Trade History: " + json.dumps(trades)
+
     except Exception as e:
         print(f"Failed to process message: {message}, error: {e}")
     return None
@@ -83,7 +102,6 @@ async def simulate_realtime_orderbook():
             if random.random() < 0.5: # Add order every 25 seconds
                 new_order = generate_random_order()
                 await order_book.add_order(new_order)
-                print(f"New order: {new_order}")
 
             # Randomly cancel an order
             #if should_cancel_order() and order_book.order_map:
@@ -109,7 +127,8 @@ async def simulate_realtime_orderbook():
 def register_simulation_users():
     users = [
         {"user_id": "user1", "username": "User One", "password": "password1", "balance": 1000000.0},
-        {"user_id": "user2", "username": "User Two", "password": "password2", "balance": 1000000.0}
+        {"user_id": "user2", "username": "User Two", "password": "password2", "balance": 1000000.0},
+        {"user_id": "user3", "username": "User Three", "password": "password3", "balance": 1000000.0}
     ]
     for user in users:
         register_account(user["user_id"], user["username"], user["password"], user["balance"])

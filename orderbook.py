@@ -62,11 +62,18 @@ class OrderBook:
 
         save_order_to_db(order)
         self.order_map[order.order_id] = order
-        print(f"Added {order}")
         await self.broadcast_update(f"New order added: {order}")
 
     async def cancel_order(self, order_id):
-        if order_id in self.order_map:
+        # Strip any whitespace from the order_id
+        order_id = order_id.strip()
+
+        # Debugging: Print the order_id and the keys in the order_map
+        print(f"Attempting to cancel order with ID: '{order_id}'")
+        print(f"Current order_map keys: {list(self.order_map.keys())}")
+
+        # Ensure all keys are stripped of whitespace
+        if order_id in (key.strip() for key in self.order_map.keys()):
             order = self.order_map.pop(order_id)
             if order.side == 'buy':
                 self.bids = [o for o in self.bids if o.order_id != order_id]
@@ -75,13 +82,17 @@ class OrderBook:
                 self.asks = [o for o in self.asks if o.order_id != order_id]
                 heapq.heapify(self.asks)
 
-            # Remove order from database
-            delete_order_from_db(order_id)
+            # Update the order status in the database to 'cancelled'
+            conn = get_connection()
+            query = "UPDATE orders SET status = 'cancelled', updated_at = ? WHERE order_id = ?"
+            conn.execute(query, (current_timestamp(), order_id))
+            conn.commit()
+            conn.close()
 
             print(f"Cancelled {order}")
             await self.broadcast_update(f"Order cancelled: {order}")
         else:
-            print(f"Order with ID {order_id} not found.")
+            print(f"Order with ID '{order_id}' not found.")
 
     async def broadcast_update(self, message):
         if self.websocket_server:
