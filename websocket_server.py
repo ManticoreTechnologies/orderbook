@@ -1,6 +1,10 @@
 import asyncio
 import websockets
 import threading
+import random
+import string
+import json
+import rpc  # Add this import
 
 class WebSocketServer:
     def __init__(self, host='localhost', port=8765, message_callback=None):
@@ -9,49 +13,42 @@ class WebSocketServer:
         self.clients = set()
         self.server = None
         self.loop = asyncio.new_event_loop()
-        self.message_callback = message_callback  # Add a callback parameter
+        self.message_callback = message_callback
 
     async def handler(self, websocket, path):
         # Register client
         self.clients.add(websocket)
         try:
+            # Skip nonce generation and authentication for testing
             while True:
-                message = await websocket.recv()  # Receive a message from the client
-                
-                # Call the callback function if it's provided
+                message = await websocket.recv()
                 if self.message_callback:
                     response = await self.message_callback(message)
                     if response:
-                        await websocket.send(response)  # Ensure response is sent back to the client
-                
-                # Echo received message (you could handle incoming messages differently here)
+                        await websocket.send(response)
                 await self.broadcast(message)
         except websockets.ConnectionClosed:
             pass
         finally:
-            # Unregister client
             self.clients.remove(websocket)
 
     async def broadcast(self, message):
-        # Broadcast a message to all connected clients
         if self.clients:
             disconnected_clients = []
-            for client in list(self.clients):  # Iterate over a copy of the set
+            for client in list(self.clients):
                 if client.open:
                     try:
                         await client.send(message)
                     except websockets.ConnectionClosed:
                         disconnected_clients.append(client)
-            # Remove disconnected clients after the iteration
             for client in disconnected_clients:
-                if client in self.clients:  # Check if the client is still in the set
+                if client in self.clients:
                     try:
                         self.clients.remove(client)
                     except KeyError:
                         pass
 
     def start(self):
-        # Start the WebSocket server
         def run_server():
             asyncio.set_event_loop(self.loop)
             self.server = websockets.serve(self.handler, self.host, self.port, loop=self.loop)
@@ -63,7 +60,6 @@ class WebSocketServer:
         server_thread.start()
 
     def stop(self):
-        # Stop the WebSocket server
         if self.server:
             self.loop.call_soon_threadsafe(self.loop.stop)
             print("WebSocket server stopped.")

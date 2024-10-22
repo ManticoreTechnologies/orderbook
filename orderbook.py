@@ -253,10 +253,10 @@ class OrderBook:
         conn.commit()
         conn.close()
 
-    def get_trade_history(self, user_id):
+    def get_trade_history(self):
         conn = get_connection()
-        query = "SELECT * FROM trade_history WHERE user_id = ? ORDER BY timestamp ASC"
-        trades = conn.execute(query, (user_id,)).fetchall()
+        query = "SELECT * FROM trade_history ORDER BY timestamp DESC LIMIT 20"
+        trades = conn.execute(query).fetchall()
         conn.close()
         return trades
 
@@ -271,3 +271,10 @@ class OrderBook:
         """Save an account to the database."""
         save_account_to_db(account)
         print(f"Saved account: {account}")
+
+    async def broadcast_trade_history(self):
+        if self.websocket_server:
+            trade_history = self.get_trade_history()
+            await self.websocket_server.broadcast(f"Trade History: {json.dumps(trade_history)}")
+        else:
+            print("WebSocket server not initialized.")

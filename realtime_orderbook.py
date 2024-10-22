@@ -6,7 +6,9 @@ from orderbook import OrderBook
 from order_utils import generate_random_order
 from message_handler import process_message
 from user_utils import register_simulation_users
-
+# TODO: Add RPC script for calling verifymessage
+# TODO: Add authentication to websocket for users, use a nonced signed message
+# TODO: Add a held balance to the accounts
 async def simulate_realtime_orderbook():
     # Register users for the simulation
     register_simulation_users()
@@ -30,6 +32,9 @@ async def simulate_realtime_orderbook():
 
             # Attempt to match orders
             await order_book.match_orders()
+
+            # broadcast trade history
+            await order_book.broadcast_trade_history()
 
             # Show the current state of the order book
             await order_book.show_order_book()

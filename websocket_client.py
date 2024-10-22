@@ -1,27 +1,35 @@
 import asyncio
 import websockets
+import json
+import rpc
 
 
-async def listen_to_orderbook():
+async def authenticate_and_listen():
     uri = "ws://localhost:8765"
-    while True:
-        try:
-            async with websockets.connect(uri, timeout=10) as websocket:  # Set timeout to 10 seconds
-                print("Connected to the WebSocket server.")
-                while True:
-                    message = await websocket.recv()
-                    print(f"Received message: {message}")
-        except (websockets.ConnectionClosed, asyncio.CancelledError):
-            print("WebSocket connection closed. Reconnecting...")
-            await asyncio.sleep(1)  # Wait a bit before reconnecting
+    async with websockets.connect(uri) as websocket:
+        # Receive nonce from server
+        nonce_message = await websocket.recv()
+        nonce = nonce_message.split(": ")[1]
+
+        # Sign the nonce
+        signed_message = rpc.sign_message("EdsY3uu7tteVKCr7FdkrWs26t75LBwy4wQ", message)
+
+        # Send authentication message
+        auth_message = {
+            "public_address": "EdsY3uu7tteVKCr7FdkrWs26t75LBwy4wQ",
+            "signature": signed_message.signature.hex()
+        }
+        await websocket.send(json.dumps(auth_message))
+
+        # Receive authentication response
+        auth_response = await websocket.recv()
+        print(auth_response)
+
+        if "successful" in auth_response:
+            while True:
+                message = await websocket.recv()
+                print(f"Received message: {message}")
+
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(listen_to_orderbook())
-    except RuntimeError as e:
-        if str(e) == "This event loop is already running":
-            # If the event loop is already running, use it
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(listen_to_orderbook())
-        else:
-            raise
+    asyncio.run(authenticate_and_listen())

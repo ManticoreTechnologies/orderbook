@@ -56,9 +56,8 @@ async def process_message(message, order_book):
             print(f"Order cancelled: {order_id}")
             return f"Cancelled Order ID: {order_id}"
 
-        if message.startswith("Get Trade History:"):
-            _, user_id = message.split(":", 1)
-            trades = order_book.get_trade_history(user_id)
+        if message.startswith("get_trade_history"):
+            trades = order_book.get_trade_history()
             return "Trade History: " + json.dumps(trades)
 
         if message.startswith("Check Balance:"):
