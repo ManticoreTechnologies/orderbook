@@ -119,10 +119,10 @@ class OrderBook:
 
             # Record the trade in the trade history
             conn = get_connection()
-            trade_query = """INSERT INTO trade_history (user_id, order_id, price, quantity, timestamp)
-                             VALUES (?, ?, ?, ?, ?)"""
-            conn.execute(trade_query, (highest_bid.user_id, highest_bid.order_id, transaction_price, matched_quantity, current_timestamp()))
-            conn.execute(trade_query, (lowest_ask.user_id, lowest_ask.order_id, transaction_price, matched_quantity, current_timestamp()))
+            trade_query = """INSERT INTO trade_history (user_id, order_id, price, quantity, side, timestamp)
+                             VALUES (?, ?, ?, ?, ?, ?)"""
+            conn.execute(trade_query, (highest_bid.user_id, highest_bid.order_id, transaction_price, matched_quantity, highest_bid.side, current_timestamp()))
+            conn.execute(trade_query, (lowest_ask.user_id, lowest_ask.order_id, transaction_price, matched_quantity, lowest_ask.side, current_timestamp()))
             conn.commit()
             conn.close()
 

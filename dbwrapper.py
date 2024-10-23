@@ -51,6 +51,7 @@ conn.execute('''CREATE TABLE IF NOT EXISTS trade_history (
     order_id TEXT NOT NULL,
     price REAL NOT NULL,
     quantity INTEGER NOT NULL,
+    side TEXT CHECK(side IN ('buy', 'sell')) NOT NULL,
     timestamp TEXT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(user_id)
 );''')
