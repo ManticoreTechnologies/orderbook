@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime
+import json
 
 def get_connection():
     """Create a new database connection."""
@@ -52,11 +53,30 @@ conn.execute('''CREATE TABLE IF NOT EXISTS trade_history (
     price REAL NOT NULL,
     quantity INTEGER NOT NULL,
     side TEXT CHECK(side IN ('buy', 'sell')) NOT NULL,
+    taker BOOLEAN NOT NULL,
     timestamp TEXT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(user_id)
 );''')
 conn.commit()
 conn.close()
+
+def create_ohlc_table():
+    conn = get_connection()
+    conn.execute('''CREATE TABLE IF NOT EXISTS ohlc (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        resolution TEXT NOT NULL,
+        open REAL NOT NULL,
+        high REAL NOT NULL,
+        low REAL NOT NULL,
+        close REAL NOT NULL,
+        volume INTEGER NOT NULL,
+        timestamp TEXT NOT NULL
+    );''')
+    conn.commit()
+    conn.close()
+
+# Call this function to create the new table
+create_ohlc_table()
 
 def current_timestamp():
     return datetime.now().isoformat()
@@ -143,3 +163,37 @@ def register_account(user_id, username, password, balance):
         print(f"Account with user_id {user_id} already exists.")
     finally:
         conn.close()
+
+def save_ohlc_to_db(ohlc_data):
+    """Save OHLC data to the database as a JSON string."""
+    conn = get_connection()
+    query = "SELECT ohlc_data FROM ohlc WHERE resolution = ? ORDER BY timestamp DESC LIMIT 1"
+    result = conn.execute(query, (ohlc_data['resolution'],)).fetchone()
+
+    if result:
+        # Load existing OHLC data list
+        ohlc_list = json.loads(result[0])
+    else:
+        # Start a new list if no data exists
+        ohlc_list = []
+
+    # Append the new OHLC data
+    ohlc_list.append({
+        'open': ohlc_data['open'],
+        'high': ohlc_data['high'],
+        'low': ohlc_data['low'],
+        'close': ohlc_data['close'],
+        'volume': ohlc_data['volume'],
+        'timestamp': ohlc_data['timestamp']
+    })
+
+    # Serialize the updated OHLC list to a JSON string
+    ohlc_json = json.dumps(ohlc_list)
+
+    # Update the database with the new OHLC list
+    query = """INSERT OR REPLACE INTO ohlc (resolution, ohlc_data, timestamp)
+               VALUES (?, ?, ?)"""
+    values = (ohlc_data['resolution'], ohlc_json, ohlc_data['timestamp'])
+    conn.execute(query, values)
+    conn.commit()
+    conn.close()

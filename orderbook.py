@@ -2,8 +2,9 @@ import heapq
 import json
 from tabulate import tabulate
 from dbwrapper import get_connection, load_orders_from_db, save_order_to_db, save_ticker_to_db, update_order_in_db, delete_order_from_db, current_timestamp, load_accounts_from_db, save_account_to_db, load_account_from_db
-from datetime import datetime
+from datetime import datetime, timedelta
 from account import Account
+import asyncio
 
 class Order:
     def __init__(self, order_id, price, quantity, side, user_id, timestamp=None):
@@ -119,10 +120,16 @@ class OrderBook:
 
             # Record the trade in the trade history
             conn = get_connection()
-            trade_query = """INSERT INTO trade_history (user_id, order_id, price, quantity, side, timestamp)
-                             VALUES (?, ?, ?, ?, ?, ?)"""
-            conn.execute(trade_query, (highest_bid.user_id, highest_bid.order_id, transaction_price, matched_quantity, highest_bid.side, current_timestamp()))
-            conn.execute(trade_query, (lowest_ask.user_id, lowest_ask.order_id, transaction_price, matched_quantity, lowest_ask.side, current_timestamp()))
+            trade_query = """INSERT INTO trade_history (user_id, order_id, price, quantity, side, taker, timestamp)
+                             VALUES (?, ?, ?, ?, ?, ?, ?)"""
+            
+            # the  maker is  the oldest trade
+            if highest_bid.timestamp <= lowest_ask.timestamp:
+                conn.execute(trade_query, (highest_bid.user_id, highest_bid.order_id, transaction_price, matched_quantity, highest_bid.side, True, current_timestamp()))
+                conn.execute(trade_query, (lowest_ask.user_id, lowest_ask.order_id, transaction_price, matched_quantity, lowest_ask.side, False, current_timestamp()))
+            else:
+                conn.execute(trade_query, (highest_bid.user_id, highest_bid.order_id, transaction_price, matched_quantity, highest_bid.side, False, current_timestamp()))
+                conn.execute(trade_query, (lowest_ask.user_id, lowest_ask.order_id, transaction_price, matched_quantity, lowest_ask.side, True, current_timestamp()))
             conn.commit()
             conn.close()
 
@@ -255,7 +262,7 @@ class OrderBook:
 
     def get_trade_history(self):
         conn = get_connection()
-        query = "SELECT * FROM trade_history ORDER BY timestamp DESC LIMIT 20"
+        query = "SELECT * FROM trade_history WHERE taker = 1 ORDER BY timestamp DESC LIMIT 20"
         trades = conn.execute(query).fetchall()
         conn.close()
         return trades
@@ -278,3 +285,168 @@ class OrderBook:
             await self.websocket_server.broadcast(f"Trade History: {json.dumps(trade_history)}")
         else:
             print("WebSocket server not initialized.")
+
+    def calculate_ohlc(self, resolution):
+        """Calculate OHLC data for a given resolution using taker trade history only."""
+        print(f"Calculating OHLC for resolution: {resolution}")
+        end_time = datetime.now()
+
+        if 'second' in resolution:
+            seconds = int(resolution.split()[0])
+            start_time = end_time - timedelta(seconds=seconds)
+        elif 'minute' in resolution:
+            minutes = int(resolution.split()[0])
+            start_time = end_time.replace(second=0, microsecond=0) - timedelta(minutes=minutes)
+        elif 'hour' in resolution:
+            hours = int(resolution.split()[0])
+            start_time = end_time.replace(minute=0, second=0, microsecond=0) - timedelta(hours=hours)
+        elif 'day' in resolution:
+            start_time = end_time.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+        else:
+            raise ValueError("Unsupported resolution")
+
+        conn = get_connection()
+        query = "SELECT timestamp FROM ohlc WHERE resolution = ? ORDER BY timestamp DESC LIMIT 1"
+        latest_ohlc = conn.execute(query, (resolution,)).fetchone()
+        conn.close()
+
+        if latest_ohlc:
+            latest_timestamp = datetime.fromisoformat(latest_ohlc[0])
+            if latest_timestamp >= start_time:
+                print(f"Skipping OHLC update for {resolution}, latest timestamp: {latest_timestamp}")
+                return None
+
+        conn = get_connection()
+        query = """
+        SELECT price, quantity, timestamp FROM trade_history
+        WHERE taker = 1 AND timestamp BETWEEN ? AND ?
+        ORDER BY timestamp ASC
+        """
+        trades = conn.execute(query, (start_time.isoformat(), end_time.isoformat())).fetchall()
+        conn.close()
+
+        if not trades:
+            print(f"No trades found for {resolution} between {start_time} and {end_time}")
+            conn = get_connection()
+            latest_trade_query = """
+            SELECT price, quantity, timestamp FROM trade_history
+            WHERE taker = 1
+            ORDER BY timestamp DESC LIMIT 1
+            """
+            latest_trade = conn.execute(latest_trade_query).fetchone()
+            conn.close()
+
+            if not latest_trade:
+                print(f"No latest trade found for {resolution}")
+                return None
+
+            open_price = high_price = low_price = close_price = latest_trade[0]
+            volume = latest_trade[1]
+        else:
+            open_price = trades[0][0]
+            high_price = trades[0][0]
+            low_price = trades[0][0]
+            close_price = trades[-1][0]
+            volume = 0
+
+            for trade in trades:
+                price = trade[0]
+                quantity = trade[1]
+                high_price = max(high_price, price)
+                low_price = min(low_price, price)
+                volume += quantity
+
+        print(f"Calculated OHLC for {resolution}: Open={open_price}, High={high_price}, Low={low_price}, Close={close_price}, Volume={volume}")
+        return {
+            'resolution': resolution,
+            'open': open_price,
+            'high': high_price,
+            'low': low_price,
+            'close': close_price,
+            'volume': volume,
+            'timestamp': current_timestamp()
+        }
+
+    async def update_ohlc_data(self):
+        print("Updating OHLC data")
+        resolutions = ['15 second', '1 minute', '5 minute', '15 minute', '30 minute', '1 hour', '4 hour', '8 hour', '1 day']
+        ohlc_list = []
+        for resolution in resolutions:
+            ohlc_data = self.calculate_ohlc(resolution)
+            if ohlc_data:
+                self.save_ohlc_to_db(ohlc_data)
+                ohlc_list.append(ohlc_data)
+        await self.broadcast_ohlc(ohlc_list)
+
+    def save_ohlc_to_db(self, ohlc_data):
+        """Save or update OHLC data in the database."""
+        print(f"Saving OHLC data to DB for resolution: {ohlc_data['resolution']}, timestamp: {ohlc_data['timestamp']}")
+        conn = get_connection()
+        
+        query = "SELECT id FROM ohlc WHERE resolution = ? AND timestamp = ?"
+        result = conn.execute(query, (ohlc_data['resolution'], ohlc_data['timestamp'])).fetchone()
+
+        if result:
+            print(f"Updating existing OHLC entry for resolution: {ohlc_data['resolution']}, timestamp: {ohlc_data['timestamp']}")
+            query = """UPDATE ohlc SET open = ?, high = ?, low = ?, close = ?, volume = ?
+                       WHERE id = ?"""
+            values = (ohlc_data['open'], ohlc_data['high'], ohlc_data['low'], ohlc_data['close'], ohlc_data['volume'], result[0])
+        else:
+            print(f"Inserting new OHLC entry for resolution: {ohlc_data['resolution']}, timestamp: {ohlc_data['timestamp']}")
+            query = """INSERT INTO ohlc (resolution, open, high, low, close, volume, timestamp)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)"""
+            values = (ohlc_data['resolution'], ohlc_data['open'], ohlc_data['high'], ohlc_data['low'], ohlc_data['close'], ohlc_data['volume'], ohlc_data['timestamp'])
+
+        conn.execute(query, values)
+        conn.commit()
+        conn.close()
+
+    async def broadcast_ohlc(self, ohlc_list):
+        """Broadcast a list of OHLC data to WebSocket clients."""
+        if self.websocket_server:
+            pass
+            #await self.websocket_server.broadcast(f"OHLC Data: {json.dumps(ohlc_list)}")
+        else:
+            print("WebSocket server not initialized.")
+
+    def load_ohlc_from_db(self, resolution, limit=100):
+        conn = get_connection()
+        query = """
+        SELECT open, high, low, close, volume, timestamp FROM ohlc
+        WHERE resolution = ? ORDER BY timestamp DESC LIMIT ?
+        """
+        result = conn.execute(query, (resolution, limit)).fetchall()
+        conn.close()
+        if result:
+            return [
+                {
+                    'open': row[0],
+                    'high': row[1],
+                    'low': row[2],
+                    'close': row[3],
+                    'volume': row[4],
+                    'timestamp': row[5]
+                }
+                for row in result
+            ]
+        return None
+
+    def get_taker_trade_history(self):
+        """Retrieve the trade history for takers only."""
+        conn = get_connection()
+        query = "SELECT * FROM trade_history WHERE taker = 1 ORDER BY timestamp DESC"
+        trades = conn.execute(query).fetchall()
+        conn.close()
+        return trades
+
+
+
+
+
+
+
+
+
+
+
+

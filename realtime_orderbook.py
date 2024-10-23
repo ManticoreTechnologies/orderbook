@@ -9,6 +9,7 @@ from user_utils import register_simulation_users
 # TODO: Add RPC script for calling verifymessage
 # TODO: Add authentication to websocket for users, use a nonced signed message
 # TODO: Add a held balance to the accounts
+
 async def simulate_realtime_orderbook():
     # Register users for the simulation
     register_simulation_users()
@@ -25,22 +26,25 @@ async def simulate_realtime_orderbook():
 
     try:
         while True:
-            # Generate a random order
-            if random.random() < 0.5:  # Add order every 25 seconds
+            # Generate a random order more frequently
+            if random.random() < 0.8:  # Increase the probability to add orders more frequently
                 new_order = generate_random_order()
                 await order_book.add_order(new_order)
 
             # Attempt to match orders
             await order_book.match_orders()
 
-            # broadcast trade history
+            # Broadcast trade history
             await order_book.broadcast_trade_history()
 
             # Show the current state of the order book
             await order_book.show_order_book()
 
-            # Wait for a short period to simulate real-time
-            time.sleep(1)
+            # Update OHLC data
+            await order_book.update_ohlc_data()
+            
+            # Wait for a shorter period to simulate real-time
+            time.sleep(0.5)  # Decrease the sleep time to make the simulation faster
 
     except KeyboardInterrupt:
         print("Simulation stopped.")

@@ -5,8 +5,6 @@ from orderbook import Order
 
 async def process_message(message, order_book):
     try:
-        print(f"Received message: {message}")  # Log received message
-
         if message.startswith("Register Account:"):
             _, account_details = message.split(":", 1)
             user_id, username, password = account_details.strip().split(",")
@@ -16,13 +14,13 @@ async def process_message(message, order_book):
         if message == "get_latest_ticker":
             return "Latest Ticker: " + order_book.get_latest_ticker()
         
-        if message == "get_tickers":
-            tickers = order_book.get_ticker_history()
-            return "Tickers: " + json.dumps([{
-                "timestamp": ticker[0],
-                "price": ticker[1],
-                "quantity": ticker[2]
-            } for ticker in tickers])
+        #if message == "get_tickers":
+        #    tickers = order_book.get_ticker_history()
+        #    return "Tickers: " + json.dumps([{
+        #        "timestamp": ticker[0],
+        #        "price": ticker[1],
+        #        "quantity": ticker[2]
+        #    } for ticker in tickers])
         
         if message.startswith("Place Order:"):
             _, order_details = message.split(":", 1)
@@ -70,6 +68,16 @@ async def process_message(message, order_book):
             else:
                 return f"Account with user_id {user_id} not found."
 
+        if message.startswith("get_ohlc_data:"):
+            _, resolution = message.split(":", 1)
+            resolution = resolution.strip()
+            ohlc_data = order_book.load_ohlc_from_db(resolution)
+            if ohlc_data:
+                return f"OHLC Data for {resolution}: {json.dumps(ohlc_data)}"
+            else:
+                return f"No OHLC data available for resolution: {resolution}"
+
     except Exception as e:
         print(f"Failed to process message: {message}, error: {e}")
+
     return None
