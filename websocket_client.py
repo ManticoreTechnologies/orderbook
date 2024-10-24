@@ -31,5 +31,11 @@ async def authenticate_and_listen():
                 print(f"Received message: {message}")
 
 
+async def test_basic_connection():
+    uri = "ws://localhost:8765"
+    async with websockets.connect(uri) as websocket:
+        print("Connected to the WebSocket server")
+
+
 if __name__ == "__main__":
-    asyncio.run(authenticate_and_listen())
+    asyncio.run(test_basic_connection())
