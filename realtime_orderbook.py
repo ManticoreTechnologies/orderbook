@@ -18,7 +18,7 @@ async def simulate_realtime_orderbook():
     websocket_server = WebSocketServer(
         host='0.0.0.0',
         port=8765,
-        message_callback=lambda message: process_message(message, order_book)
+        message_callback=lambda message, is_authenticated: process_message(message, order_book, is_authenticated)
     )
     websocket_server.start()
 

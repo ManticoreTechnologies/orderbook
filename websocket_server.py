@@ -11,26 +11,45 @@ class WebSocketServer:
         self.host = host
         self.port = port
         self.clients = set()
+        self.authenticated_clients = set()  # Track authenticated clients
         self.server = None
         self.loop = asyncio.new_event_loop()
         self.message_callback = message_callback
 
     async def handler(self, websocket, path):
-        # Register client
         self.clients.add(websocket)
         try:
-            # Skip nonce generation and authentication for testing
+            # Send a nonce to the client
+            nonce = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+            await websocket.send(f"Nonce: {nonce}")
+
             while True:
                 message = await websocket.recv()
-                if self.message_callback:
-                    response = await self.message_callback(message)
-                    if response:
-                        await websocket.send(response)
+                if message.startswith("Authenticate:"):
+                    # Handle authentication
+                    auth_data = json.loads(message.split(":", 1)[1])
+                    signed_message = auth_data.get("signature")
+                    print(f"Received signed message: {signed_message}")
+
+                    # For now, just set authenticated to true
+                    self.authenticated_clients.add(websocket)
+                    await websocket.send("Authentication successful")
+                else:
+                    if self.message_callback:
+                        response = await self.message_callback(message, websocket in self.authenticated_clients)
+                        if response:
+                            await websocket.send(response)
                 await self.broadcast(message)
         except websockets.ConnectionClosed:
             pass
         finally:
             self.clients.remove(websocket)
+            self.authenticated_clients.discard(websocket)
+
+    def authenticate(self, auth_data):
+        # Implement your authentication logic here
+        # For example, verify a signature or token
+        return True  # Placeholder for successful authentication
 
     async def broadcast(self, message):
         if self.clients:
@@ -65,7 +84,11 @@ class WebSocketServer:
             print("WebSocket server stopped.")
 
 if __name__ == "__main__":
-    ws_server = WebSocketServer()
+    ws_server = WebSocketServer(
+        host='0.0.0.0',
+        port=8765,
+        message_callback=lambda message, is_authenticated: process_message(message, order_book, is_authenticated)
+    )
     ws_server.start()
     print(f"WebSocket server started at ws://{ws_server.host}:{ws_server.port}")
     

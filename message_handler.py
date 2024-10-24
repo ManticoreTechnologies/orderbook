@@ -3,7 +3,7 @@ import uuid
 from dbwrapper import register_account
 from orderbook import Order
 
-async def process_message(message, order_book):
+async def process_message(message, order_book, is_authenticated):
     try:
         if message.startswith("Register Account:"):
             _, account_details = message.split(":", 1)
@@ -23,6 +23,9 @@ async def process_message(message, order_book):
         #    } for ticker in tickers])
         
         if message.startswith("Place Order:"):
+            if not is_authenticated:
+                return "Authentication required to place an order."
+            
             _, order_details = message.split(":", 1)
             try:
                 parts = order_details.strip().split(" ", 2)
