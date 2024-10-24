@@ -288,7 +288,7 @@ class OrderBook:
 
     def calculate_ohlc(self, resolution):
         """Calculate OHLC data for a given resolution using taker trade history only."""
-        print(f"Calculating OHLC for resolution: {resolution}")
+        #print(f"Calculating OHLC for resolution: {resolution}")
         end_time = datetime.now()
 
         if 'second' in resolution:
@@ -326,7 +326,7 @@ class OrderBook:
         conn.close()
 
         if not trades:
-            print(f"No trades found for {resolution} between {start_time} and {end_time}")
+            #print(f"No trades found for {resolution} between {start_time} and {end_time}")
             conn = get_connection()
             latest_trade_query = """
             SELECT price, quantity, timestamp FROM trade_history
@@ -337,7 +337,7 @@ class OrderBook:
             conn.close()
 
             if not latest_trade:
-                print(f"No latest trade found for {resolution}")
+                #print(f"No latest trade found for {resolution}")
                 return None
 
             open_price = high_price = low_price = close_price = latest_trade[0]
@@ -368,7 +368,7 @@ class OrderBook:
         }
 
     async def update_ohlc_data(self):
-        print("Updating OHLC data")
+        #print("Updating OHLC data")
         resolutions = ['15 second', '1 minute', '5 minute', '15 minute', '30 minute', '1 hour', '4 hour', '8 hour', '1 day']
         ohlc_list = []
         for resolution in resolutions:

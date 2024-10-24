@@ -27,9 +27,9 @@ async def simulate_realtime_orderbook():
     try:
         while True:
             # Generate a random order more frequently
-            if random.random() < 0.8:  # Increase the probability to add orders more frequently
-                new_order = generate_random_order()
-                await order_book.add_order(new_order)
+            #if random.random() < 0.8:  # Increase the probability to add orders more frequently
+            #    new_order = generate_random_order()
+            #    await order_book.add_order(new_order)
 
             # Attempt to match orders
             await order_book.match_orders()
