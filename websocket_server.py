@@ -5,6 +5,7 @@ import random
 import string
 import json
 import rpc  # Add this import
+import xmlrpc.client  # Add this import
 
 class WebSocketServer:
     def __init__(self, host='localhost', port=8765, message_callback=None):
@@ -15,25 +16,38 @@ class WebSocketServer:
         self.server = None
         self.loop = asyncio.new_event_loop()
         self.message_callback = message_callback
+        self.nonces = {}  # Store nonces for each client
 
     async def handler(self, websocket, path):
         self.clients.add(websocket)
         try:
-            # Send a nonce to the client
-            nonce = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
-            await websocket.send(f"Nonce: {nonce}")
-
             while True:
                 message = await websocket.recv()
-                if message.startswith("Authenticate:"):
+                print(f"Received message: {message}")
+                if message.startswith("GetNonce"):
+                    print("Received GetNonce")
+                    nonce = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+                    self.nonces[websocket] = nonce  # Store nonce for this client
+                    print(f"Sending nonce: {nonce}")
+                    await websocket.send(f"Nonce: {nonce}")
+                elif message.startswith("Authenticate:"):
                     # Handle authentication
                     auth_data = json.loads(message.split(":", 1)[1])
-                    signed_message = auth_data.get("signature")
-                    print(f"Received signed message: {signed_message}")
+                    address = auth_data.get("public_address")
+                    signature = auth_data.get("signature")
+                    nonce = self.nonces.get(websocket)  # Retrieve nonce for this client
+                    print(f"Received signed message: {signature}")
 
-                    # For now, just set authenticated to true
-                    self.authenticated_clients.add(websocket)
-                    await websocket.send("Authentication successful")
+                    try:
+                        # Verify the message
+                        if nonce and rpc.verify_message(address, signature, nonce):
+                            self.authenticated_clients.add(websocket)
+                            await websocket.send("Authentication successful")
+                        else:
+                            await websocket.send("Authentication failed")
+                    except xmlrpc.client.ProtocolError as e:
+                        print(f"ProtocolError: {e}")
+                        await websocket.send("Error: Failed to verify signature")
                 else:
                     if self.message_callback:
                         response = await self.message_callback(message, websocket in self.authenticated_clients)
@@ -45,11 +59,7 @@ class WebSocketServer:
         finally:
             self.clients.remove(websocket)
             self.authenticated_clients.discard(websocket)
-
-    def authenticate(self, auth_data):
-        # Implement your authentication logic here
-        # For example, verify a signature or token
-        return True  # Placeholder for successful authentication
+            self.nonces.pop(websocket, None)  # Remove nonce for this client
 
     async def broadcast(self, message):
         if self.clients:
