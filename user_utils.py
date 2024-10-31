@@ -1,4 +1,4 @@
-from dbwrapper import register_account
+from .dbwrapper import register_account
 
 def register_simulation_users():
     users = [
