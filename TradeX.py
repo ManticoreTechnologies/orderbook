@@ -1,13 +1,10 @@
 from datetime import datetime
 from Database import accounts
 from SocketX import on, start_server
-import asyncio
 import secrets
-from orderbook import OrderBook
 
 from rpc import verify_message, get_new_address
 
-order_book = OrderBook()
 
 # Create a dictionary to store the client's account information
 clients_info = {} # websocket: client_info_template
@@ -153,13 +150,5 @@ async def get_bids(websocket):
 async def get_orderbook(websocket):
     return f"{{bids: {order_book.bids}, asks: {order_book.asks}}}"
 
-# You can add more event handlers as needed
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(start_server())  # Await the start_server coroutine
-    except KeyboardInterrupt:
-        print("Server stopped manually")
-    except Exception as e:
-        print(f"Server error: {e}")
 

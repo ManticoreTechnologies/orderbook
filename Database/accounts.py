@@ -30,6 +30,7 @@ conn.execute('''CREATE TABLE IF NOT EXISTS accounts (
     deposit_addresses TEXT NOT NULL
 );''')
 
+
 # Commit the changes and close the connection
 conn.commit()
 conn.close()
@@ -41,7 +42,7 @@ conn.close()
 def create_account(address):
     conn = get_connection(db_name)
     try:
-        conn.execute("INSERT INTO accounts (address, balances, orders, deposit_addresses) VALUES (?, '', '', '')", (address,))
+        conn.execute("INSERT INTO accounts (address, balances, orders, deposit_addresses) VALUES (?, '{}', '{}', '{}')", (address,))
         conn.commit()
     except sqlite3.IntegrityError as e:
         if "unique constraint failed" in str(e):
@@ -91,11 +92,53 @@ def get_account(address):
     # Close the connection
     conn.close()
     
+    # If account doesn't exist, create it
+    if not account_row:
+        create_account(address)
+        return get_account(address)  # Re-fetch the newly created account
+
     # Convert the row to a dictionary
-    account = dict(account_row) if account_row else None
+    account = dict(account_row)
+
+    # Convert the balances and orders to dictionaries
+    account['balances'] = json.loads(account['balances'])
+    account['orders'] = json.loads(account['orders'])   
     
     # Return the account
     return account
+
+def get_balance(address, asset):
+    account = get_account(address)
+    try:
+        return account['balances'][asset]
+    except KeyError:
+        return 0
+
+# Deposit an asset to the account
+def deposit_asset(address, asset, amount):
+
+    """ While in testnet, we just add the amount to the balance """
+
+    account = get_account(address)
+    account['balances'][asset] = int(account['balances'][asset]) + int(amount)
+    conn = get_connection(db_name)
+    conn.execute("UPDATE accounts SET balances = ? WHERE address = ?", (json.dumps(account['balances']), address))
+    conn.commit()
+    conn.close()
+
+def withdraw_asset(address, asset, amount):
+
+    """ While in testnet, we just subtract the amount from the balance, if the amount withdrawn would make the balance negative, we raise an exception """
+
+    account = get_account(address)
+    current_balance = int(account['balances'][asset])
+    if current_balance < int(amount):
+        raise ValueError("Insufficient balance for withdrawal")
+    account['balances'][asset] = current_balance - int(amount)
+    conn = get_connection(db_name)
+    conn.execute("UPDATE accounts SET balances = ? WHERE address = ?", (json.dumps(account['balances']), address))
+    conn.commit()
+    conn.close()
 
 # Add a deposit address to the account
 def get_new_deposit_address(account_address, assetName):

@@ -5,20 +5,46 @@
 import websockets
 import asyncio
 import logging
-import colorlog
 
-# Initialize logging with colorlog
-handler = colorlog.StreamHandler()
-handler.setFormatter(colorlog.ColoredFormatter(
-    '%(log_color)s%(asctime)s - %(levelname)s - %(message)s',
-    log_colors={
-        'DEBUG': 'cyan',
-        'INFO': 'green',
-        'WARNING': 'yellow',
-        'ERROR': 'red',
-        'CRITICAL': 'bold_red',
+# Define custom log levels
+SENT_LEVEL = 25
+RECEIVED_LEVEL = 26
+logging.addLevelName(SENT_LEVEL, "SENT")
+logging.addLevelName(RECEIVED_LEVEL, "RECEIVED")
+
+# Function to log at custom levels
+def sent(self, message, *args, **kws):
+    if self.isEnabledFor(SENT_LEVEL):
+        self._log(SENT_LEVEL, message, args, **kws)
+
+def received(self, message, *args, **kws):
+    if self.isEnabledFor(RECEIVED_LEVEL):
+        self._log(RECEIVED_LEVEL, message, args, **kws)
+
+logging.Logger.sent = sent
+logging.Logger.received = received
+
+# Custom formatter using ANSI escape codes
+class CustomFormatter(logging.Formatter):
+    COLORS = {
+        'DEBUG': '\033[36m',  # Cyan
+        'INFO': '\033[31m',   # Red
+        'WARNING': '\033[33m', # Yellow
+        'ERROR': '\033[31m',  # Red
+        'CRITICAL': '\033[1;31m', # Bold Red
+        'SENT': '\033[34m',   # Blue
+        'RECEIVED': '\033[35m', # Magenta
     }
-))
+    RESET = '\033[0m'
+
+    def format(self, record):
+        log_color = self.COLORS.get(record.levelname, self.RESET)
+        message = super().format(record)
+        return f"{log_color}{message}{self.RESET}"
+
+# Initialize logging with custom formatter
+handler = logging.StreamHandler()
+handler.setFormatter(CustomFormatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger = logging.getLogger(__name__)
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
@@ -39,10 +65,10 @@ class TradeXClient:
     async def send(self, message, callback=None):
         if self.websocket:
             await self.websocket.send(message)
-            logger.info(f"Sent: {message}")
+            logger.sent(f"Sent: {message}")
             while True:
                 response = await self.websocket.recv()
-                logger.info(f"Received response: {response}")
+                logger.received(f"Received: {response}")
                 if callback and response.startswith("auth_challenge"):
                     # Parse the response to extract the challenge
                     _, challenge = response.split(maxsplit=1)
@@ -68,25 +94,32 @@ async def main():
     client_address = "EdsY3uu7tteVKCr7FdkrWs26t75LBwy4wQ"
 
     
-    async def handle_auth_challenge(challenge):
-        logger.info(f"Handling auth challenge: {challenge}")
-        # Send back the signed challenge to the server with command auth_challenge_response
-        signed_challenge = sign_message(client_address, challenge)
-        await client.send(f"auth_challenge_response {signed_challenge}")
-        # Add logic to handle the auth challenge here
 
-    # Try using protected commands before authenticating    
-    
-    # Every client MUST send a greetings_from message to the server, otherwise they are ignored
-    await client.send(f"greetings_from {client_name}")
-    
+    # One you receive the challenge from the server, you must sign it with your private key and send it back to the server
+    async def handle_authorize_challenge(challenge):
+        logger.info(f"Handling auth challenge: {challenge}")
+
+        # Sign the challenge with your private key
+        signed_challenge = sign_message(client_address, challenge)
+
+        # Send the signed challenge back to the server
+        await client.send(f"authorize_challenge {signed_challenge}")
+
+    await client.send("Hello")
+    await client.send(f"authorize {client_address}", callback=handle_authorize_challenge)
+    await client.send("Secret")
+    await client.send("get_balance USD")
+    await client.send("deposit_asset USD 100")
+    await client.send("get_balance USD")
+    await client.send("withdraw_asset USD 500")
+    await client.send("get_balance USD")
     # We can get the orderbook without authentication
-    await client.send("get_orderbook")
+    #await client.send("get_orderbook")
     
     # Authenticate and try to place an order
-    await client.send(f"auth {client_address}", callback=handle_auth_challenge)
-    await client.send("place_order market bid EVR 100 100")
-    await client.send("get_orderbook")
+    #await client.send(f"auth {client_address}", callback=handle_auth_challenge)
+    #await client.send("place_order market bid EVR 100 100")
+    #await client.send("get_orderbook")
     
     #await client.send("get_account")
     #await client.send("new_deposit_address EVR")
