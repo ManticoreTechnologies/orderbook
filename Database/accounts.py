@@ -5,6 +5,7 @@ It should also store the users active, on-hold and closed orders
 """
 
 # Import the sqlite3 module
+from datetime import datetime
 import json
 import sqlite3
 
@@ -27,7 +28,9 @@ conn.execute('''CREATE TABLE IF NOT EXISTS accounts (
     address TEXT PRIMARY KEY,
     balances TEXT NOT NULL,
     orders TEXT NOT NULL,
-    deposit_addresses TEXT NOT NULL
+    deposit_addresses TEXT NOT NULL,
+    session_token TEXT,
+    session_created TEXT
 );''')
 
 
@@ -41,6 +44,7 @@ conn.close()
 
 """ Managing accounts"""
 def create_account(address):
+    print(f"Creating account for {address}")
     conn = get_connection(db_name)
     try:
         conn.execute("INSERT INTO accounts (address, balances, orders, deposit_addresses) VALUES (?, '{}', '{}', '{}')", (address,))
@@ -94,6 +98,10 @@ def get_balance(address, asset):
     except KeyError:
         return 0
 
+def get_all_balances(address):
+    account = get_account(address)
+    return account['balances']
+
 # Deposit an asset to the account
 def deposit_asset(address, asset, amount):
 
@@ -143,63 +151,116 @@ def get_new_deposit_address(account_address, assetName):
     return deposit_address
 
 
-
-
 """ Retrieving orders """
+order_db = "orders"
 def get_order_by_id(order_id):
-    conn = get_connection(db_name)
-    conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
-    order = conn.fetchone()
+    conn = get_connection(order_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+    order = cursor.fetchone()
     conn.close()
     return order
 
 def get_all_orders(address):
-    conn = get_connection(db_name)
-    conn.execute("SELECT * FROM orders WHERE address = ?", (address,))
-    orders = conn.fetchall()
+    conn = get_connection(order_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE address = ?", (address,))
+    rows = cursor.fetchall()
+    headers = [description[0] for description in cursor.description]
+    orders = [dict(zip(headers, row)) for row in rows]
+    market_orders = {}
+    for order in orders:
+        market = order['market']
+        if market not in market_orders:
+            market_orders[market] = []
+        market_orders[market].append(order)
     conn.close()
-    return orders
+    return market_orders
 
 def get_partially_filled_orders(address):
-    conn = get_connection(db_name)
-    conn.execute("SELECT * FROM orders WHERE address = ? AND status = 'partially filled'", (address,))
-    orders = conn.fetchall()
+    conn = get_connection(order_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE address = ? AND status = 'partially filled'", (address,))
+    orders = cursor.fetchall()
     conn.close()
     return orders
 
 def get_filled_orders(address):
-    conn = get_connection(db_name)
-    conn.execute("SELECT * FROM orders WHERE address = ? AND status = 'filled'", (address,))
-    orders = conn.fetchall()
+    conn = get_connection(order_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE address = ? AND status = 'filled'", (address,))
+    orders = cursor.fetchall()
     conn.close()
     return orders
 
 def get_open_orders(address):
-    conn = get_connection(db_name)
-    conn.execute("SELECT * FROM orders WHERE address = ? AND status = 'open'", (address,))
-    orders = conn.fetchall()
+    conn = get_connection(order_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE address = ? AND status = 'open'", (address,))
+    orders = cursor.fetchall()
     conn.close()
     return orders
 
 def get_cancelled_orders(address):
-    conn = get_connection(db_name)
-    conn.execute("SELECT * FROM orders WHERE address = ? AND status = 'cancelled'", (address,))
-    orders = conn.fetchall()
+    conn = get_connection(order_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE address = ? AND status = 'cancelled'", (address,))
+    rows = cursor.fetchall()
+    headers = [description[0] for description in cursor.description]
+    cancelled_orders = [dict(zip(headers, row)) for row in rows]
+    market_orders = {}
+    for order in cancelled_orders:
+        market = order['market']
+        if market not in market_orders:
+            market_orders[market] = []
+        market_orders[market].append(order)
     conn.close()
-    return orders
+    return market_orders
 
 
 """ Cancelling orders """
 
 def cancel_all_orders(address):
-    conn = get_connection(db_name)
-    conn.execute("UPDATE orders SET status = 'cancelled' WHERE address = ?", (address,))
+    conn = get_connection(order_db)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE orders SET status = 'cancelled' WHERE address = ?", (address,))
     conn.commit()
     conn.close()
 
 def cancel_all_orders_for_market(address, market):
-    conn = get_connection(db_name)
-    conn.execute("UPDATE orders SET status = 'cancelled' WHERE address = ? AND market = ?", (address, market))
+    conn = get_connection(order_db)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE orders SET status = 'cancelled' WHERE address = ? AND market = ?", (address, market))
     conn.commit()
     conn.close()
 
+def cancel_order(address, order_id):
+    conn = get_connection(order_db)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE orders SET status = 'cancelled' WHERE address = ? AND id = ?", (address, order_id))
+    conn.commit()
+    conn.close()
+
+""" Session management """
+def set_session_token(address, session_token):
+    print(f"Setting session token for {address}: {session_token}")
+    conn = get_connection(db_name)
+    conn.execute("UPDATE accounts SET session_token = ?, session_created = ? WHERE address = ?", (session_token, datetime.now().isoformat(), address))
+    conn.commit()
+    conn.close()
+
+    session_data = get_session_token(address)
+    print(f"Session data: {session_data}")
+
+def get_session_token(address):
+    conn = get_connection(db_name)
+    print(f"Getting session token for {address}")
+    account = get_account(address)
+    print(f"Account: {account}")
+    session_data = conn.execute("SELECT session_token, session_created FROM accounts WHERE address = ?", (address,)).fetchone()
+    print(f"Session data: {session_data}")
+    conn.close()
+    if session_data:
+        return {"session_token": session_data[0], "session_created": session_data[1]}
+    else:
+        return None

@@ -105,15 +105,23 @@ async def main():
         # Send the signed challenge back to the server
         await client.send(f"authorize_challenge {signed_challenge}")
 
-    await client.send("Hello")
-    #await client.send(f"authorize {client_address}", callback=handle_authorize_challenge)
-    #await client.send("Secret")
+    await client.send("Hello") # Just a simple ping for clients to test connection
+    
+    # Authenticate with the server
+    await client.send(f"authorize {client_address}", callback=handle_authorize_challenge)
+    await client.send("get_all_balances")
+    #await client.send("deposit_asset USD 100")
     #await client.send("get_balance USD")
+    #await client.send("cancel_order ac1689e4-d5e9-4a74-9d89-d2358975a2c3")
+    #await client.send("place_order EVR_USD bid limit 1 1")
+    #await client.send("get_all_orders")
+    #await client.send("get_open_orders")
+    #await client.send("get_cancelled_orders")
+    #await client.send("Secret")
     #await client.send("deposit_asset USD 100")
     #await client.send("get_balance USD")
     #await client.send("withdraw_asset USD 500")
     #await client.send("get_balance USD")
-    #await client.send("place_order EVR_USD bid limit 1 1")
     #await client.send("cancel_all_orders")
     #await client.send("get_orders")
     # We can get the orderbook without authentication

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import websockets
 
 # Import the logger from LogX.py
+from Database.accounts import get_session_token, set_session_token
 from LogX import logger, log_received, log_sent
 
 # Import secrets to generate a challenge
@@ -27,10 +28,37 @@ def on(event_name):
         return func
     return decorator
 
+@on("ping")
+async def ping(websocket):
+    # simulate a delay
+    return "pong"
+
+@on("restore_session")
+async def restore_session(websocket, address, user_session):
+    # Set the address in the client info
+    update_client_info_field(websocket, "address", address)
+    # Get the session token from the database
+    
+    session_data = get_session_token(address)   
+    print(f"Session data: {session_data}")
+    # Check if the user session is valid and not expired
+    if session_data and session_data["session_token"] == user_session:
+        session_created = datetime.fromisoformat(session_data["session_created"])
+        time_diff = datetime.now() - session_created
+        if time_diff <= timedelta(hours=12):
+            remaining_time = timedelta(hours=12) - time_diff
+            hours, remainder = divmod(remaining_time.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            print(f"Session remaining time: {hours} hours, {minutes} minutes, {seconds} seconds")
+            set_authenticated(websocket, True)
+            return f"session_restored {remaining_time}"
+        else:
+            return "Session expired"
+    else:
+        return "Invalid session"
 
 @on("authorize")
 async def authorize(websocket, address):
-    print(f"Authenticating client {address} via websocket {websocket}")
     # Create a challenge
     challenge = secrets.token_hex(16)
     update_client_info_field(websocket, "challenge", challenge)
@@ -44,13 +72,13 @@ async def authorize(websocket, address):
 async def authorize_challenge(websocket, signature):
     """ Client can attempt to complete a challenge
         The server will verify the signature and if valid, will authenticate the client
-        Challenges expire after 10 seconds and can only be used once
+        Challenges expire after 1 minute and can only be used once
     """
 
-    # First check if the challenge is still valid, challenges expire after 10 seconds
+    # First check if the challenge is still valid, challenges expire after 1 minute
     client_info = get_client_info(websocket)
     challenge_created = datetime.fromisoformat(client_info["challenge_created"])
-    if datetime.now() - challenge_created > timedelta(seconds=10):
+    if datetime.now() - challenge_created > timedelta(minutes=1):
         # Remove the challenge from the client's info
         update_client_info_field(websocket, "challenge", None)  
         return "Challenge expired. Please start over"
@@ -59,9 +87,12 @@ async def authorize_challenge(websocket, signature):
     if verify_message(client_info["address"], signature, client_info["challenge"]):
         # Authenticate the client
         set_authenticated(websocket, True)
-        return "Authentication successful. Welcome to the server!"
+        # Return a user session token
+        user_session = secrets.token_hex(16)
+        set_session_token(client_info["address"], user_session)
+        return f"authorized {client_info['address']} {user_session}"
     else:
-        return "Authentication failed. Please start over"
+        return "authorization_failed"
     
 def add_client(websocket, client_info):
     clients_info[websocket] = client_info
@@ -95,8 +126,6 @@ def protected(func):
     # Decorator to make a command protected
     async def wrapper(websocket, *args, **kwargs):
         # Check if the websocket is in the clients_info dictionary
-        print(f"------------------------------")
-        print(websocket)
         try:
             client_info = clients_info[websocket]
         except KeyError:
@@ -122,7 +151,8 @@ async def hello(websocket, path):
     try:
         while True:
             message = await websocket.recv()
-            log_received(f"Received message: {message}")
+            if message != "ping":
+                log_received(f"Received message: {message}")
 
             # Split the message into command and arguments
             parts = message.split()
@@ -134,7 +164,8 @@ async def hello(websocket, path):
                     # Pass the arguments to the handler
                 response = await event_handlers[command](websocket, *args)
                 await websocket.send(response)
-                log_sent(f"Sent response: {response}")
+                if response != "pong":
+                    log_sent(f"Sent response: {response}")
             else:
                 warning_message = f"No handler for command: {command}"
                 await websocket.send(warning_message)

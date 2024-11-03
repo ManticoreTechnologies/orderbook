@@ -6,19 +6,15 @@ from SocketX import get_client_info, get_client_info_field, on, protected, updat
     Each command is a function that takes a websocket and returns a response
     The command decorator @on("command_name") is used to register the command
     The protected decorator @protected is used to protect the command
-    Protected commands are only available to authenticated clients and are passed the client_info dictionary of the respective client
+    Protected commands are only available to authenticated clients and are passed the client_info dictionary of the clients account
+    Authentication is handled in the SocketX.py file
 """
 
-# A simple public command
-@on("Hello")
-async def Hello(websocket):
-    return "Hello from server"
 
-# A simple protected command
-@on("Secret")
-@protected
-async def Secret(websocket, client_info):
-    return f"Super Secret message from server, i know your address ;)... {client_info['address']}"
+""" Public commands that are available to all clients, authenticated or not """
+
+
+
 
 
 """ 
@@ -37,6 +33,12 @@ async def get_balance(websocket, client_info, asset):
     balance = accounts.get_balance(client_info['address'], asset)
     return f"Your balance is {balance}"
     
+@on("get_all_balances")
+@protected
+async def get_all_balances(websocket, client_info):
+    balances = accounts.get_all_balances(client_info['address'])
+    return f"all_balances: {balances}"
+
 @on("deposit_asset")
 @protected
 async def deposit_asset(websocket, client_info, asset, amount):
@@ -76,11 +78,11 @@ async def place_order(websocket, client_info, market, side, type, amount, price)
     except Exception as e:
         return f"Error placing order: {e}"
 
-@on("get_orders")
+@on("get_all_orders")
 @protected
-async def get_orders(websocket, client_info):
+async def get_all_orders(websocket, client_info):
     
-    account_orders = orders.get_account_orders(client_info['address'])
+    account_orders = accounts.get_all_orders(client_info['address'])
     return f"account_orders: {account_orders}"
 
 @on("cancel_all_orders")
@@ -94,6 +96,24 @@ async def cancel_all_orders(websocket, client_info):
 async def cancel_all_order_for_market(websocket, client_info, market):
     orders.cancel_all_orders_for_market(client_info['address'], market)
     return f"All orders for {market} cancelled"
+
+@on("cancel_order")
+@protected
+async def cancel_order(websocket, client_info, order_id):
+    accounts.cancel_order(client_info['address'], order_id)
+    return f"Order {order_id} cancelled"
+
+@on("get_open_orders")
+@protected
+async def get_open_orders(websocket, client_info):
+    open_orders = accounts.get_open_orders(client_info['address'])
+    return f"Open orders: {open_orders}"
+
+@on("get_cancelled_orders")
+@protected
+async def get_cancelled_orders(websocket, client_info):
+    cancelled_orders = accounts.get_cancelled_orders(client_info['address'])
+    return f"Cancelled orders: {cancelled_orders}"
 
 # TODO: Add commands for creating and managing orders
 # TODO: Add commands for getting market data
