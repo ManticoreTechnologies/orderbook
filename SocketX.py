@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import websockets
 
 # Import the logger from LogX.py
-from LogX import logger  
+from LogX import logger, log_received, log_sent
 
 # Import secrets to generate a challenge
 import secrets
@@ -113,7 +113,7 @@ def protected(func):
 
 def onclose(websocket):
     """Handle the closing of a WebSocket connection."""
-    logger.info(f"Connection closed for client: {websocket}")
+    logger.info(f"Connection closed for client: {id(websocket)}")
     remove_client(websocket)
 
 # This will be the websocket server for all of TradeX
@@ -122,7 +122,7 @@ async def hello(websocket, path):
     try:
         while True:
             message = await websocket.recv()
-            logger.info(f"Received message: {message}")
+            log_received(f"Received message: {message}")
 
             # Split the message into command and arguments
             parts = message.split()
@@ -134,7 +134,7 @@ async def hello(websocket, path):
                     # Pass the arguments to the handler
                 response = await event_handlers[command](websocket, *args)
                 await websocket.send(response)
-                logger.info(f"Sent response: {response}")
+                log_sent(f"Sent response: {response}")
             else:
                 warning_message = f"No handler for command: {command}"
                 await websocket.send(warning_message)

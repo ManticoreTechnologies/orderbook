@@ -44,7 +44,7 @@ class CustomFormatter(logging.Formatter):
 
 # Initialize logging with custom formatter
 handler = logging.StreamHandler()
-handler.setFormatter(CustomFormatter('%(asctime)s - %(levelname)s - %(message)s'))
+handler.setFormatter(CustomFormatter('%(message)s'))
 logger = logging.getLogger(__name__)
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
@@ -106,13 +106,16 @@ async def main():
         await client.send(f"authorize_challenge {signed_challenge}")
 
     await client.send("Hello")
-    await client.send(f"authorize {client_address}", callback=handle_authorize_challenge)
-    await client.send("Secret")
-    await client.send("get_balance USD")
-    await client.send("deposit_asset USD 100")
-    await client.send("get_balance USD")
-    await client.send("withdraw_asset USD 500")
-    await client.send("get_balance USD")
+    #await client.send(f"authorize {client_address}", callback=handle_authorize_challenge)
+    #await client.send("Secret")
+    #await client.send("get_balance USD")
+    #await client.send("deposit_asset USD 100")
+    #await client.send("get_balance USD")
+    #await client.send("withdraw_asset USD 500")
+    #await client.send("get_balance USD")
+    #await client.send("place_order EVR_USD bid limit 1 1")
+    #await client.send("cancel_all_orders")
+    #await client.send("get_orders")
     # We can get the orderbook without authentication
     #await client.send("get_orderbook")
     

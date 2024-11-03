@@ -1,5 +1,5 @@
 # Import the on decorator from SocketX
-from Database import accounts
+from Database import accounts, orders
 from SocketX import get_client_info, get_client_info_field, on, protected, update_client_info_field
 
 """ Here we define the commands that the server will handle 
@@ -53,3 +53,47 @@ async def withdraw_asset(websocket, client_info, asset, amount):
         return f"You have withdrawn {amount} of {asset}. Your new balance is {accounts.get_balance(client_info['address'], asset)}"
     except Exception as e:
         return f"Error withdrawing {amount} of {asset}: {e}"
+
+@on("place_order")
+@protected
+async def place_order(websocket, client_info, market, side, type, amount, price):
+    #split market into base and quote
+    base = market.split("_")[0]
+    quote = market.split("_")[1]
+    # Get the clients account
+    account_info = accounts.get_account(client_info['address'])
+    if account_info is None:
+        raise Exception("Account not found")
+    # Check the balance of the account
+    balance = accounts.get_balance(client_info['address'], quote)
+    print(f"Balance: {balance}")
+    if int(balance) < int(amount):
+        return f"Insufficient balance for {amount} of {quote}"
+    # Place the order
+    try:
+        order_id = orders.place_order(client_info['address'], market, side, type, amount, price)
+        return f"Your order has been placed with id {order_id}"
+    except Exception as e:
+        return f"Error placing order: {e}"
+
+@on("get_orders")
+@protected
+async def get_orders(websocket, client_info):
+    
+    account_orders = orders.get_account_orders(client_info['address'])
+    return f"account_orders: {account_orders}"
+
+@on("cancel_all_orders")
+@protected
+async def cancel_all_orders(websocket, client_info):
+    orders.cancel_all_orders(client_info['address'])
+    return f"All orders cancelled"
+
+@on("cancel_all_order_for_market")
+@protected
+async def cancel_all_order_for_market(websocket, client_info, market):
+    orders.cancel_all_orders_for_market(client_info['address'], market)
+    return f"All orders for {market} cancelled"
+
+# TODO: Add commands for creating and managing orders
+# TODO: Add commands for getting market data

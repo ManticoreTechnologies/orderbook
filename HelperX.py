@@ -17,3 +17,6 @@ if isinstance(config, configparser.ConfigParser):
             print(f"{key} = {value}")
 else:
     print(config)
+
+def rows_to_dict(rows):
+    return [dict(zip([column[0] for column in rows.description], row)) for row in rows]

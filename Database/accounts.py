@@ -38,7 +38,8 @@ conn.close()
 
 # Define all the helper functions here
 
-# Create a new account
+
+""" Managing accounts"""
 def create_account(address):
     conn = get_connection(db_name)
     try:
@@ -50,27 +51,6 @@ def create_account(address):
             raise Exception("Account already registered")
     finally:
         conn.close()
-
-# Load all accounts from the database, return a list of tuples
-def load_accounts_from_db():
-
-    """Load all accounts from the database."""
-    
-    # Get the database connection
-    conn = get_connection(db_name)
-
-    # Select all the users from the database
-    query = "SELECT * FROM accounts"
-
-    # Execute the query
-    accounts = conn.execute(query).fetchall()
-
-    # Close the connection
-    conn.close()
-
-    # Return the accounts
-    return accounts
-
 
 # Load a single account from the database by address, return a named dict
 def get_account(address):
@@ -118,8 +98,9 @@ def get_balance(address, asset):
 def deposit_asset(address, asset, amount):
 
     """ While in testnet, we just add the amount to the balance """
-
     account = get_account(address)
+    if asset not in account['balances']:
+        account['balances'][asset] = 0
     account['balances'][asset] = int(account['balances'][asset]) + int(amount)
     conn = get_connection(db_name)
     conn.execute("UPDATE accounts SET balances = ? WHERE address = ?", (json.dumps(account['balances']), address))
@@ -161,7 +142,64 @@ def get_new_deposit_address(account_address, assetName):
     # Return the deposit address
     return deposit_address
 
-# Test the functions
-if __name__ == "__main__":
-    create_account("0x1234567890abcdef", "{}", "{}")
-    print(get_account("0x1234567890abcdef"))
+
+
+
+""" Retrieving orders """
+def get_order_by_id(order_id):
+    conn = get_connection(db_name)
+    conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+    order = conn.fetchone()
+    conn.close()
+    return order
+
+def get_all_orders(address):
+    conn = get_connection(db_name)
+    conn.execute("SELECT * FROM orders WHERE address = ?", (address,))
+    orders = conn.fetchall()
+    conn.close()
+    return orders
+
+def get_partially_filled_orders(address):
+    conn = get_connection(db_name)
+    conn.execute("SELECT * FROM orders WHERE address = ? AND status = 'partially filled'", (address,))
+    orders = conn.fetchall()
+    conn.close()
+    return orders
+
+def get_filled_orders(address):
+    conn = get_connection(db_name)
+    conn.execute("SELECT * FROM orders WHERE address = ? AND status = 'filled'", (address,))
+    orders = conn.fetchall()
+    conn.close()
+    return orders
+
+def get_open_orders(address):
+    conn = get_connection(db_name)
+    conn.execute("SELECT * FROM orders WHERE address = ? AND status = 'open'", (address,))
+    orders = conn.fetchall()
+    conn.close()
+    return orders
+
+def get_cancelled_orders(address):
+    conn = get_connection(db_name)
+    conn.execute("SELECT * FROM orders WHERE address = ? AND status = 'cancelled'", (address,))
+    orders = conn.fetchall()
+    conn.close()
+    return orders
+
+
+""" Cancelling orders """
+
+def cancel_all_orders(address):
+    conn = get_connection(db_name)
+    conn.execute("UPDATE orders SET status = 'cancelled' WHERE address = ?", (address,))
+    conn.commit()
+    conn.close()
+
+def cancel_all_orders_for_market(address, market):
+    conn = get_connection(db_name)
+    conn.execute("UPDATE orders SET status = 'cancelled' WHERE address = ? AND market = ?", (address, market))
+    conn.commit()
+    conn.close()
+
