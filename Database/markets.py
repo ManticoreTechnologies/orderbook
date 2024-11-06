@@ -6,8 +6,9 @@
 """
 
 """ Imports """
-from datetime import datetime
 from Database.get_connection import get_connection
+from HelperX import generate_unique_id
+from datetime import datetime
 
 """ Database name """
 database_name = "manticore_markets"
@@ -26,34 +27,23 @@ database_name = "manticore_markets"
         - description : the description of the market
         - tick_size : the tick size of the market
 
-    - a database for each market to store the bids, asks, trades, and other data
+    - orders: to store all the orders data for any market
+        - address: the public evrmore address of the user
+        - order_id: the id of the order (unique identifier)
+        - order_type: the type of the order (market or limit)
+        - order_status: the status of the order (open, filled, cancelled)
+        - order_created: the date and time the order was created
+        - order_filled: the date and time the order was filled
+        - order_price: the price of the order (in satoshis)
+        - order_quantity: the quantity of the order (in satoshis)
+        - order_market: the market of the order (e.g. evr/usdm)
+        - order_side: the side of the order (bid or ask)
+        - order_fee: the fee of the order (in satoshis)
 
 """
 
-""" Default markets are defined here, other markets are payed for by users 
-    To create a new market, any user can pay a special order to create it
-    We will have a link on the exchange to submit this special market creation order
-    We collect the entire amount of the order as our fee for creating the market
-    Xeggex charges $5000 per market, but this is way too high for us
-    We will charge $500 per market, and offer special promotions from time to time
-    Xeggex needs to implement each new market, we will have an automated system to do this
-    We can do this because we are focusing solely on the Evrmore ecosystem, only supporting EVR and evrmore assets
-"""
-
-""" The default market I have chosen is INFERNA/EVR
-    This can be empty, but since INFERNA is the native exchange token, it makes sense to have it
-"""
-
-default_markets = [
-    {"market_name": "INFERNA/EVR", "base_currency": "INFERNA", "quote_currency": "EVR", "description": "INFERNA to EVR exchange market", "tick_size": 0.00001},
-]
-
-""" Creating the markets table
-    This table will store all the markets data
-    If the table does not exist, we will create it
-"""
+""" Market table """
 def create_market_table():
-    """Create the markets table if it doesn't exist."""
     conn = get_connection(database_name)
     conn.execute('''CREATE TABLE IF NOT EXISTS markets (
         market_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,31 +58,57 @@ def create_market_table():
     conn.commit()
     conn.close()
 
-""" Purging the markets table 
-    This is used to reset ALL the markets data
-    This should only be done in emergencies or testing
-    Use purge_market to delete a single market
-"""
-def purge_markets():
-    """Delete all markets from the database."""
+def purge_market_table():
+    """ Purge the markets table 
+        This will delete all the markets from the markets table
+        Esentially nuking the entire exchange of markets
+    """
     conn = get_connection(database_name)
     conn.execute("DELETE FROM markets")
     conn.commit()
     conn.close()
 
-def purge_market(market_name):
-    """Delete a market from the database."""
+""" Order table """
+def create_order_table():
     conn = get_connection(database_name)
-    conn.execute("DELETE FROM markets WHERE market_name = ?", (market_name,))
+    conn.execute(
+    '''CREATE TABLE IF NOT EXISTS orders (
+        address TEXT,
+        order_id TEXT,
+        order_type TEXT,
+        order_status TEXT,
+        order_created TEXT,
+        order_filled TEXT,
+        order_price REAL,
+        order_quantity REAL,
+        order_market TEXT,
+        order_side TEXT,
+        order_fee REAL,
+        PRIMARY KEY (address, order_id)
+    );''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_order_created ON orders (order_created);')
     conn.commit()
     conn.close()
 
-""" Adding a market to the database 
+def purge_order_table():
+    """ Purge the orders table 
+        This will delete all the orders from the orders table
+        Esentially nuking the entire exchange of orders
+    """
+    conn = get_connection(database_name)
+    conn.execute("DELETE FROM orders")
+    conn.commit()
+    conn.close()
 
-    When we add a market, we need to create a new database for it
+""" Managing markets 
+
+    This will create a new market if it does not exist
+    Otherwise it will return False
+
+    Whenever a user pays to list a new market, they must provide the base and quote asset
+    They must also provide a description and tick size
 """
-def add_market(base_asset, quote_asset, description, tick_size):
-
+def create_new_market(base_asset, quote_asset, description, tick_size):
     """ Connect to the database """
     conn = get_connection(database_name)
 
@@ -110,7 +126,6 @@ def add_market(base_asset, quote_asset, description, tick_size):
         print(f"Market {base_asset}/{quote_asset} already exists")
         return False
     elif not existing_market:
-
         print(f"Market {base_asset}/{quote_asset} does not exist, creating it")
 
         """ Create the market dictionary """
@@ -142,9 +157,136 @@ def add_market(base_asset, quote_asset, description, tick_size):
     """ Close the connection """
     conn.close()
 
-""" Get all the markets from the database """
-def get_all_markets():
-    """Fetch all markets from the database and return them as a dictionary keyed by name."""
+def purge_market(market_name):
+    """ Purge a single market from the markets table """
+    conn = get_connection(database_name)
+    conn.execute("DELETE FROM markets WHERE market_name = ?", (market_name,))
+    conn.commit()
+    conn.close()
+
+def purge_markets():
+    """ Purge all the markets from the markets table 
+        Also purges the orders table, this nukes the entire exchange of markets and orders
+        Resetting it to a clean state
+    """
+    purge_market_table()
+    purge_order_table()
+
+""" Managing orders
+
+    Users can create new orders and cancel them, but they cannot be deleted
+    This allows us to keep track of all the orders for a user
+    
+    The accounts.py file contains functions for managing orders that use these functions
+    this way all the order management is in one place and we can keep things consistent
+
+    create_new_order: Add an order to the orders table
+    cancel_order: Cancel an order, set the status to cancelled
+    purge_order: Purge an order, delete it from the orders table
+    purge_orders: Purge all orders for an account, delete them from the orders table
+    purge_all_orders: Purge all orders from the orders table
+"""
+
+def create_new_order(address, type, side, market, price, quantity, fee):
+    """ This method allows a user to create a new order 
+        We currently dont support market orders, only limit orders
+    """
+
+    """ Check if the order type is valid """
+    if type not in ["limit"]:
+        raise ValueError(f"Invalid order type: {type}")
+    
+    """ Create a unique order id """
+    order_id = generate_unique_id()
+
+    """ Get the current date and time """
+    created = datetime.now().isoformat()
+
+    """ Open a database connection """
+    conn = get_connection(database_name)
+
+    """ Insert the order into the database """
+    conn.execute(
+        """
+        INSERT INTO orders 
+        (address, order_id, order_type, order_status, order_created, order_filled, order_price, order_quantity, order_market, order_side, order_fee) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (address, order_id, type, "open", created, None, price, quantity, market, side, fee)
+    )
+
+    """ Commit the changes """
+    conn.commit()
+
+    """ Close the connection """
+    conn.close()
+
+def cancel_order(address, order_id):
+    """ Allows a user to cancel an order for their account """
+    
+    """ Open a database connection """
+    conn = get_connection(database_name)
+
+    """ Check if the order belongs to the address """
+    existing_order = conn.execute("SELECT 1 FROM orders WHERE address = ? AND order_id = ?", (address, order_id)).fetchone()
+    
+    """ If the order does not exist then it doesn't belong to the address, return False """
+    if not existing_order:
+        print(f"Order {order_id} does not belong to {address}")
+        return False
+    
+    """ Otherwise, update the order status to cancelled """
+    try:
+        conn.execute("UPDATE orders SET order_status = 'cancelled' WHERE address = ? AND order_id = ?", (address, order_id))
+        conn.commit()
+    except Exception as e:
+        print(f"Error cancelling order {order_id} for {address}: {e}")
+        return False
+    return True
+
+def cancel_all_orders(address):
+    """ Cancel all orders for an address """
+    conn = get_connection(database_name)
+    conn.execute("UPDATE orders SET order_status = 'cancelled' WHERE address = ?", (address,))
+    conn.commit()
+    conn.close()
+
+def cancel_all_bids(address):
+    """ Cancel all bids for an address """
+    conn = get_connection(database_name)
+    conn.execute("UPDATE orders SET order_status = 'cancelled' WHERE address = ? AND order_side = 'bid'", (address,))
+    conn.commit()
+    conn.close()
+
+def cancel_all_asks(address):
+    """ Cancel all asks for an address """
+    conn = get_connection(database_name)
+    conn.execute("UPDATE orders SET order_status = 'cancelled' WHERE address = ? AND order_side = 'ask'", (address,))
+    conn.commit()
+    conn.close()
+
+def purge_order(address, order_id):
+    """ Purge an order from the orders table """
+    conn = get_connection(database_name)
+    conn.execute("DELETE FROM orders WHERE address = ? AND order_id = ?", (address, order_id))
+    conn.commit()
+    conn.close()
+
+def purge_orders(address):
+    """ Purge all orders for an address from the orders table """
+    conn = get_connection(database_name)
+    conn.execute("DELETE FROM orders WHERE address = ?", (address,))
+    conn.commit()
+    conn.close()
+
+def purge_all_orders():
+    """ Purge all orders from the orders table """
+    purge_order_table()
+
+""" Retrieving market data """
+
+def list_all_markets():
+    """ List all the markets in the markets table """
     conn = get_connection(database_name)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM markets")
@@ -153,39 +295,91 @@ def get_all_markets():
     conn.close()
     return markets
 
-""" Get the information for a single market """
 def get_market_info(market_name):
-    """Fetch a market from the database and return it as a dictionary."""
+    """ Get the information for a single market """
     conn = get_connection(database_name)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM markets WHERE market_name = ?", (market_name,))
     row = cursor.fetchone()
-    if row:
-        return dict(zip([col[0] for col in cursor.description], row))
-    else:
-        return None
+    conn.close()
+    return dict(zip([col[0] for col in cursor.description], row))
 
-""" Create the markets table 
-    This will create the markets table if it does not exist
+def get_market_status(market_name):
+    """ Get the status of a single market """
+    conn = get_connection(database_name)
+    cursor = conn.cursor()
+    cursor.execute("SELECT status FROM markets WHERE market_name = ?", (market_name,))
+    status = cursor.fetchone()
+    conn.close()
+    return status[0]
+
+def get_market_orders(market_name):
+    """ Get all the orders for a single market """
+    conn = get_connection(database_name)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE order_market = ?", (market_name,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def get_open_orders(market_name):
+    """ Get all the open orders for a single market """
+    conn = get_connection(database_name)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE order_market = ? AND order_status = 'open'", (market_name,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def get_open_bids(market_name):
+    """ Get all the open bids for a single market 
+        This should return a sorted list of bids by creation date, the oldest first
+        This is useful for matching bids to asks, in a FIFO manner
+    """
+    conn = get_connection(database_name)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE order_market = ? AND order_status = 'open' AND order_side = 'bid' ORDER BY order_created", (market_name,))
+    rows = cursor.fetchall()
+    bids = [dict(zip([col[0] for col in cursor.description], row)) for row in rows]
+    conn.close()
+    return bids
+
+def get_open_asks(market_name):
+    """ Get all the open asks for a single market """
+    conn = get_connection(database_name)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE order_market = ? AND order_status = 'open' AND order_side = 'ask'", (market_name,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+""" Create the required tables
+
+    -markets
+    -orders
+
 """
 create_market_table()
-
-""" Add the supported markets to the database 
-    if they are not already there 
-"""
-for market in default_markets:
-    market_dict = {
-        'market_name': market['market_name'],
-        'base_currency': market['base_currency'],
-        'quote_currency': market['quote_currency'],
-        'created_at': datetime.now().isoformat(),
-        'description': market['description'],
-        'tick_size': market['tick_size']
-    }
-    add_market(market_dict['base_currency'], market_dict['quote_currency'], market_dict['description'], market_dict['tick_size'])
+create_order_table()
 
 
+""" Setup new markets here, run this file to add new markets to the database """
 if __name__ == "__main__":
-    
-    print(get_market_info('INFERNA/EVR'))
-    print(get_market_info('INFERNA/EVR'))
+
+
+    print(list_all_markets())
+
+    def add_new_market():
+        markets_to_add = [
+            {"market_name": "INFERNA/EVR", "base_currency": "INFERNA", "quote_currency": "EVR", "description": "INFERNA to EVR exchange market", "tick_size": 0.00001},
+        ]
+        for market in markets_to_add:
+            create_new_market(market['base_currency'], market['quote_currency'], market['description'], market['tick_size'])
+
+    add_new_market()
+
+    print(get_market_status('INFERNA/EVR'))
+
+    #create_new_order('0x0000000000000000000000000000000000000000', 'limit', 'bid', 'INFERNA/EVR', 1, 1, 0)
+    purge_all_orders()
+    print(get_open_bids('INFERNA/EVR'))

@@ -112,7 +112,7 @@ create_table(database_connection.cursor(), "addresses", supported_assets)
 
 create_table(database_connection.cursor(), "balances", supported_assets)
 
-""" Create the orders table
+""" Create the orders table (Deprecated)
 
     address: The public evrmore address of the user
     order_id: The id of the order (unique identifier)
@@ -127,7 +127,7 @@ create_table(database_connection.cursor(), "balances", supported_assets)
     order_fee: The fee of the order (in satoshis)
     
 """
-
+"""
 database_connection.execute(
     '''CREATE TABLE IF NOT EXISTS orders (
         address TEXT,
@@ -143,6 +143,8 @@ database_connection.execute(
         order_fee REAL,
         PRIMARY KEY (address, order_id)
     );''')
+"""
+
 
 # Commit the changes to the database
 database_connection.commit()
@@ -330,143 +332,6 @@ def get_all_balances(address):
     columns = [description[1] for description in database_connection.execute("PRAGMA table_info(balances)").fetchall()]
     # Skip the first column (address) in the dictionary comprehension
     return {column: balance for column, balance in zip(columns[1:], balances[0][1:])}
-
-""" Orders table functions
-
-    add_order: Add an order to the orders table
-    get_order_by_id: Get an order by its id
-    get_all_orders: Get all orders for an account
-    get_all_orders_for_market: Get all orders for a market
-    get_all_open_orders: Get all open orders for an account
-    get_all_cancelled_orders: Get all cancelled orders for an account
-    get_all_filled_orders: Get all filled orders for an account
-    cancel_order: Cancel an order, set the status to cancelled
-    cancel_all_orders: Cancel all orders for an account, set the status to cancelled
-    purge_order: Purge an order, delete it from the orders table
-    purge_orders: Purge all orders for an account, delete them from the orders table
-    purge_all_orders: Purge all orders from the orders table
-    
-"""
-
-def add_order(address, type, side, market, price, quantity, fee):
-
-    """ 
-        We currently dont support market orders, only limit orders
-    """
-
-    # Check if the order type is valid
-    if type not in ["limit"]:
-        raise ValueError(f"Invalid order type: {type}")
-
-    # Create unique order id
-    order_id = generate_unique_id()
-
-    # Get the current date and time
-    created = datetime.now().isoformat()
-
-    # Add the order to the orders table
-    database_connection.execute(
-        """
-        INSERT INTO orders 
-        (address, order_id, order_type, order_status, order_created, order_filled, order_price, order_quantity, order_market, order_side, order_fee) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            address, 
-            order_id, 
-            type, 
-            "open", 
-            created, 
-            None, 
-            price, 
-            quantity, 
-            market, 
-            side, 
-            fee
-        )
-    )
-
-
-    # Commit the changes to the database
-    database_connection.commit()
-
-    # Return the order id to the caller
-    return order_id
-
-def get_order_by_id(address, order_id):
-    return database_connection.execute("SELECT * FROM orders WHERE address = ? AND order_id = ?", (address, order_id)).fetchone()
-
-def get_all_orders(address):
-    return database_connection.execute("SELECT * FROM orders WHERE address = ?", (address,)).fetchall()
-
-def get_all_orders_for_market(address, market):
-    return database_connection.execute("SELECT * FROM orders WHERE address = ? AND order_market = ?", (address, market)).fetchall()
-
-def get_all_open_orders(address):
-    return database_connection.execute("SELECT * FROM orders WHERE address = ? AND order_status = 'open'", (address,)).fetchall()
-
-def get_all_cancelled_orders(address):
-    return database_connection.execute("SELECT * FROM orders WHERE address = ? AND order_status = 'cancelled'", (address,)).fetchall()
-
-def get_all_filled_orders(address):
-    return database_connection.execute("SELECT * FROM orders WHERE address = ? AND order_status = 'filled'", (address,)).fetchall()
-
-def cancel_order(address, order_id):
-    try:
-        # First, check if the order_id belongs to this address
-        existing_order = database_connection.execute("SELECT 1 FROM orders WHERE address = ? AND order_id = ?", (address, order_id)).fetchone()
-        if existing_order:
-            database_connection.execute("UPDATE orders SET order_status = 'cancelled' WHERE address = ? AND order_id = ?", (address, order_id))
-            database_connection.commit()
-        else:
-            print(f"Order {order_id} does not belong to {address}")
-            return False
-    except Exception as e:
-        print(f"Error cancelling order {order_id} for {address}: {e}")
-        return False
-    return True
-
-def cancel_all_orders(address):
-    try:
-        database_connection.execute("UPDATE orders SET order_status = 'cancelled' WHERE address = ?", (address,))
-        database_connection.commit()
-    except Exception as e:
-        print(f"Error cancelling all orders for {address}: {e}")
-        return False
-    return True
-
-def purge_order(address, order_id):
-    try:
-        # First, check if the order_id belongs to this address
-        existing_order = database_connection.execute("SELECT 1 FROM orders WHERE address = ? AND order_id = ?", (address, order_id)).fetchone()
-        if existing_order:
-            database_connection.execute("DELETE FROM orders WHERE address = ? AND order_id = ?", (address, order_id))
-            database_connection.commit()
-        else:
-            print(f"Order {order_id} does not belong to {address}")
-            return False
-    except Exception as e:
-        print(f"Error purging order {order_id} for {address}: {e}")
-        return False
-    return True
-
-def purge_orders(address):
-    try:
-        database_connection.execute("DELETE FROM orders WHERE address = ?", (address,))
-        database_connection.commit()
-    except Exception as e:
-        print(f"Error purging orders for {address}: {e}")
-        return False
-    return True
-
-def purge_all_orders():
-    try:
-        database_connection.execute("DELETE FROM orders")
-        database_connection.commit()
-    except Exception as e:
-        print(f"Error purging all orders: {e}")
-        return False
-    return True
 
 """ Authentication table functions
 

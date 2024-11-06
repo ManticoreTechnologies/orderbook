@@ -17,7 +17,7 @@ from SocketX import get_client_info, get_client_info_field, on, protected, updat
 async def get_all_markets(websocket):
 
     print("Fetching all markets from the database")
-    return f"all_markets {markets.get_all_markets()}"
+    return f"all_markets {markets.list_all_markets()}"
 
 @on("get_market_info")
 async def get_market_info(websocket, market_name):
