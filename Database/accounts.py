@@ -187,7 +187,9 @@ def init_account(address):
 
     # First things first, check if address is already in accounts
     if database_connection.execute("SELECT 1 FROM accounts WHERE address = ?", (address,)).fetchone():
-        raise AccountExistsException(f"Account already exists for address: {address}")
+        return False
+        # I dont think we should raise an exception here, as the user may be trying to log in
+        #raise AccountExistsException(f"Account already exists for address: {address}")
 
     """ account table """
 
@@ -235,9 +237,9 @@ def init_account(address):
 
 
     """ authentication table """
-
+    # Theres really no need to initialize the authentication table, as it will be created when the user logs in
     # Initialize the authentication table with null values
-    database_connection.execute("INSERT INTO authentication (address) VALUES (?)", (address,))
+    #database_connection.execute("INSERT INTO authentication (address) VALUES (?)", (address,))
 
     """ orders table """
 
@@ -249,6 +251,8 @@ def init_account(address):
 
     # Commit the changes to the database
     database_connection.commit()
+
+    return True
 
 """ Purge an account """
 def purge_account(address):
@@ -326,6 +330,11 @@ def get_deposit_address_for_asset(address, asset):
 def get_balance_for_asset(address, asset):
     return database_connection.execute(f"SELECT {asset} FROM balances WHERE address = ?", (address,)).fetchone()[0]
 
+def get_all_balances(address):
+    balances = database_connection.execute(f"SELECT * FROM balances WHERE address = ?", (address,)).fetchall()
+    columns = [description[1] for description in database_connection.execute("PRAGMA table_info(balances)").fetchall()]
+    # Skip the first column (address) in the dictionary comprehension
+    return {column: balance for column, balance in zip(columns[1:], balances[0][1:])}
 """ 
     Orders table functions
 
@@ -474,7 +483,7 @@ def purge_all_orders():
 
 def set_session_token(address, session_token):
     print(f"Setting session token for {address}")
-    database_connection.execute("INSERT INTO authentication (address, session_token, session_created) VALUES (?, ?, ?)", (address, session_token, datetime.now()))
+    database_connection.execute("INSERT OR REPLACE INTO authentication (address, session_token, session_created) VALUES (?, ?, ?)", (address, session_token, datetime.now()))
     database_connection.commit()
 
 def get_session_token(address):

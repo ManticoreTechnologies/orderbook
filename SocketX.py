@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import websockets
 
 # Import the logger from LogX.py
-from Database.accounts import get_session_token, remove_session_token, set_session_token, validate_session_token
+from Database.accounts import get_session_token, init_account, remove_session_token, set_session_token, validate_session_token
 from LogX import logger, log_received, log_sent
 
 # Import secrets to generate a challenge
@@ -81,6 +81,8 @@ async def authorize_challenge(websocket, signature):
         # Return a user session token
         user_session = secrets.token_hex(16)
         set_session_token(client_info["address"], user_session)
+        # Initialize the account if it doesn't exist
+        init_account(client_info["address"])
         return f"authorized {client_info['address']} {user_session}"
     else:
         return "authorization_failed"
