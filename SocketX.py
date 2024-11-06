@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import websockets
 
 # Import the logger from LogX.py
-from Database.accounts import get_session_token, set_session_token
+from Database.accounts import get_session_token, remove_session_token, set_session_token
 from LogX import logger, log_received, log_sent
 
 # Import secrets to generate a challenge
@@ -53,6 +53,9 @@ async def restore_session(websocket, address, user_session):
             set_authenticated(websocket, True)
             return f"session_restored {remaining_time}"
         else:
+            print("Session expired")
+            # Remove the session from the database
+            remove_session_token(address)
             return "Session expired"
     else:
         return "Invalid session"

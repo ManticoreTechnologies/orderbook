@@ -29,6 +29,14 @@ def get_new_address():
         return False
     except Exception:
         return False
+    
+def get_balance(address):
+    try:
+        return server.getaddressbalance(address)
+    except jsonrpclib.jsonrpc.ProtocolError:
+        return False
+    except Exception:
+        return False
 
 if __name__ == "__main__":
     print(verify_message("EdsY3uu7tteVKCr7FdkrWs26t75LBwy4wQ", "IJj0ts/lK0TPUmSO7RBshfYkC+qyZnFFcrMqnj9ggI+8LS5QQ2zcwaqgM3WtN1G0JOssT3OorzAgaFQHnT3AN/8=", "message"))
