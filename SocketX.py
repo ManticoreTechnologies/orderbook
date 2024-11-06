@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import websockets
 
 # Import the logger from LogX.py
-from Database.accounts import get_session_token, remove_session_token, set_session_token
+from Database.accounts import get_session_token, remove_session_token, set_session_token, validate_session_token
 from LogX import logger, log_received, log_sent
 
 # Import secrets to generate a challenge
@@ -38,27 +38,15 @@ async def restore_session(websocket, address, user_session):
     # Set the address in the client info
     update_client_info_field(websocket, "address", address)
     # Get the session token from the database
-    
-    session_data = get_session_token(address)   
-    print(f"Session data: {session_data}")
-    # Check if the user session is valid and not expired
-    if session_data and session_data["session_token"] == user_session:
-        session_created = datetime.fromisoformat(session_data["session_created"])
-        time_diff = datetime.now() - session_created
-        if time_diff <= timedelta(hours=12):
-            remaining_time = timedelta(hours=12) - time_diff
-            hours, remainder = divmod(remaining_time.seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-            print(f"Session remaining time: {hours} hours, {minutes} minutes, {seconds} seconds")
-            set_authenticated(websocket, True)
-            return f"session_restored {remaining_time}"
-        else:
-            print("Session expired")
-            # Remove the session from the database
-            remove_session_token(address)
-            return "Session expired"
+    valid, time_diff = validate_session_token(address, user_session)
+    if valid:
+        set_authenticated(websocket, True)
+        print(f"Session remaining time: {time_diff}")
+        return f"session_restored {time_diff}"
     else:
-        return "Invalid session"
+        return "session_invalid"
+
+
 
 @on("authorize")
 async def authorize(websocket, address):

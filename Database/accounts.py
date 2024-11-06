@@ -11,7 +11,7 @@
 database_name = "manticore_accounts" 
 
 # Import the get_connection function
-from datetime import datetime
+from datetime import datetime, timedelta
 from Database.get_connection import get_connection
 import rpc
 
@@ -281,6 +281,18 @@ def purge_account(address):
     database_connection.commit()
 
 
+def purge_all_accounts():
+    
+    database_connection.execute("DELETE FROM accounts")
+    database_connection.execute("DELETE FROM addresses")
+    database_connection.execute("DELETE FROM balances")
+    database_connection.execute("DELETE FROM authentication")
+    database_connection.execute("DELETE FROM orders")
+    database_connection.commit()
+
+    print("All accounts have been purged")
+    
+
 """ 
     Account table functions
 
@@ -461,7 +473,8 @@ def purge_all_orders():
 """
 
 def set_session_token(address, session_token):
-    database_connection.execute("UPDATE authentication SET session_token = ?, session_created = ? WHERE address = ?", (session_token, datetime.now().isoformat(), address))
+    print(f"Setting session token for {address}")
+    database_connection.execute("INSERT INTO authentication (address, session_token, session_created) VALUES (?, ?, ?)", (address, session_token, datetime.now()))
     database_connection.commit()
 
 def get_session_token(address):
@@ -472,7 +485,26 @@ def remove_session_token(address):
     database_connection.commit()
 
 def validate_session_token(address, session_token):
-    return bool(database_connection.execute("SELECT 1 FROM authentication WHERE address = ? AND session_token = ?", (address, session_token)).fetchone())
+    session_data = database_connection.execute("SELECT session_token, session_created FROM authentication WHERE address = ?", (address,)).fetchone()
+    if session_data and session_data[0] == session_token:
+        session_created = datetime.fromisoformat(session_data[1])
+        time_diff = datetime.now() - session_created
+        remaining_time = timedelta(hours=12) - time_diff
+        if remaining_time > timedelta(0):
+            return True, remaining_time
+        else:
+            database_connection.execute("UPDATE authentication SET session_token = NULL, session_created = NULL WHERE address = ?", (address,))
+            database_connection.commit()
+            return False, None
+    return False, None
+
+def purge_session_token(address):
+    database_connection.execute("DELETE FROM authentication WHERE address = ?", (address,))
+    database_connection.commit()
+
+def purge_all_session_tokens():
+    database_connection.execute("DELETE FROM authentication")
+    database_connection.commit()
 
 
 
@@ -487,19 +519,21 @@ if __name__ == "__main__":
     # If the account already exists, try printing the profile ipfs
     except AccountExistsException:
         # Test all the functions
-        print(get_profile_ipfs("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
-        print(get_birthday("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
-        print(get_deposit_address_for_asset("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "evr"))
-        print(get_balance_for_asset("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "evr"))
-        print(add_order("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "limit", "bid", "evr/usdm", 10000, 1, 0.1))
-        print(cancel_order("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "30831f2c-9e6e-48b1-bcb6-a8029398b236"))
-        print(purge_order("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "30831f2c-9e6e-48b1-bcb6-a8029398b236"))
-        print(purge_orders("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
-        print(purge_all_orders())
+        #print(get_profile_ipfs("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
+        #print(get_birthday("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
+        #print(get_deposit_address_for_asset("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "evr"))
+        #print(get_balance_for_asset("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "evr"))
+        #print(add_order("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "limit", "bid", "evr/usdm", 10000, 1, 0.1))
+        #print(cancel_order("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "30831f2c-9e6e-48b1-bcb6-a8029398b236"))
+        #print(purge_order("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "30831f2c-9e6e-48b1-bcb6-a8029398b236"))
+        #print(purge_orders("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
+        #print(purge_all_orders())
         # Test the session token functions  
-        set_session_token("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "1234567890")
-        print(get_session_token("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
-        remove_session_token("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz")
-        print(validate_session_token("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "1234567890"))
+        #set_session_token("EVZWQcGh9q9UPmT7t7UfeZs8TsWd3VJmFh", "1234567890")
+        #print(get_session_token("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
+        #remove_session_token("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz")
+        #print(validate_session_token("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "1234567890"))
         # Then purge the account
-        purge_account("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz")
+        #purge_account("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz")
+        purge_all_accounts()
+        pass
