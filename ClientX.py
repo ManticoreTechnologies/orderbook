@@ -108,8 +108,9 @@ async def main():
     await client.send("Hello") # Just a simple ping for clients to test connection
     
     # Authenticate with the server
-    await client.send(f"authorize {client_address}", callback=handle_authorize_challenge)
-    await client.send("get_all_balances")
+    #await client.send(f"authorize {client_address}", callback=handle_authorize_challenge)
+    #await client.send("get_all_balances")
+    await client.send("get_orderbook INFERNA/EVR")
     #await client.send("deposit_asset USD 100")
     #await client.send("get_balance USD")
     #await client.send("cancel_order ac1689e4-d5e9-4a74-9d89-d2358975a2c3")

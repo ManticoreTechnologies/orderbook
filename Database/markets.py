@@ -1,4 +1,3 @@
-
 """ markets.py
 
     For all the functions that handle the markets data
@@ -9,6 +8,7 @@
 from Database.get_connection import get_connection
 from HelperX import generate_unique_id
 from datetime import datetime
+import json
 
 """ Database name """
 database_name = "manticore_markets"
@@ -301,6 +301,8 @@ def get_market_info(market_name):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM markets WHERE market_name = ?", (market_name,))
     row = cursor.fetchone()
+    if row is None:
+        return None
     conn.close()
     return dict(zip([col[0] for col in cursor.description], row))
 
@@ -318,6 +320,15 @@ def get_market_orders(market_name):
     conn = get_connection(database_name)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM orders WHERE order_market = ?", (market_name,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def get_cancelled_orders(market_name):
+    """ Get all the cancelled orders for a single market """
+    conn = get_connection(database_name)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE order_market = ? AND order_status = 'cancelled'", (market_name,))
     rows = cursor.fetchall()
     conn.close()
     return rows
@@ -342,6 +353,7 @@ def get_open_bids(market_name):
     rows = cursor.fetchall()
     bids = [dict(zip([col[0] for col in cursor.description], row)) for row in rows]
     conn.close()
+
     return bids
 
 def get_open_asks(market_name):
@@ -352,6 +364,53 @@ def get_open_asks(market_name):
     rows = cursor.fetchall()
     conn.close()
     return rows
+
+
+""" Special functions """
+def get_orderbook(market_name):
+    """ This method aggregates all the bids and asks for a market into an orderbook
+        Each price level will have "side", "price", "total", and "qty"
+    """
+
+    def aggregate_orders(orders, side, cursor):
+        """ Helper function to aggregate orders by price """
+        aggregates = {}
+        total = 0
+        column_names = [col[0] for col in cursor.description]
+        for order in orders:
+            order_dict = dict(zip(column_names, order))
+            price = order_dict['order_price']
+            quantity = order_dict['order_quantity']
+            if price not in aggregates:
+                aggregates[price] = {"side": side, "price": price, "qty": 0, "total": 0}
+            aggregates[price]['qty'] += quantity
+            total += quantity
+            aggregates[price]['total'] = total
+        return aggregates
+
+    """ Open a database connection """
+    conn = get_connection(database_name)
+    cursor = conn.cursor()
+
+    """ Get all the bids and asks """
+    cursor.execute("SELECT * FROM orders WHERE order_market = ? AND order_status = 'open' AND order_side = 'bid'", (market_name,))
+    bids = cursor.fetchall()
+    cursor.execute("SELECT * FROM orders WHERE order_market = ? AND order_status = 'open' AND order_side = 'ask'", (market_name,))
+    asks = cursor.fetchall()
+
+    """ Aggregate the bids and asks """
+    bid_aggregates = aggregate_orders(bids, 'bid', cursor)
+    ask_aggregates = aggregate_orders(asks, 'ask', cursor)
+
+    """ Combine and sort the orderbook """
+    orderbook = {"bids": dict(sorted(bid_aggregates.items(), key=lambda x: x[0], reverse=True)),
+                 "asks": dict(sorted(ask_aggregates.items(), key=lambda x: x[0]))}
+
+    """ Close the connection """
+    conn.close()
+
+    """ Convert the orderbook to JSON """
+    return json.dumps(orderbook)
 
 """ Create the required tables
 
@@ -380,6 +439,7 @@ if __name__ == "__main__":
 
     print(get_market_status('INFERNA/EVR'))
 
-    #create_new_order('0x0000000000000000000000000000000000000000', 'limit', 'bid', 'INFERNA/EVR', 1, 1, 0)
-    purge_all_orders()
-    print(get_open_bids('INFERNA/EVR'))
+    create_new_order('0x0000000000000000000000000000000000000000', 'limit', 'bid', 'INFERNA/EVR', 1, 1, 0)
+    create_new_order('0x0000000000000000000000000000000000000000', 'limit', 'ask', 'INFERNA/EVR', 2, 1, 0)
+    #purge_all_orders()
+    print(get_orderbook('INFERNA/EVR'))

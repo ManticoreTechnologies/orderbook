@@ -6,6 +6,7 @@
 """
 
 """ Imports"""
+from Database import markets
 from HelperX import generate_unique_id, read_config_file, create_table
 from Database.get_connection import get_connection
 from datetime import datetime, timedelta
@@ -112,38 +113,7 @@ create_table(database_connection.cursor(), "addresses", supported_assets)
 
 create_table(database_connection.cursor(), "balances", supported_assets)
 
-""" Create the orders table (Deprecated)
 
-    address: The public evrmore address of the user
-    order_id: The id of the order (unique identifier)
-    order_type: The type of the order (market or limit)
-    order_status: The status of the order (open, filled, cancelled)
-    order_created: The date and time the order was created
-    order_filled: The date and time the order was filled
-    order_price: The price of the order (in satoshis)
-    order_quantity: The quantity of the order (in satoshis)
-    order_market: The market of the order (e.g. evr/usdm)
-    order_side: The side of the order (bid or ask)
-    order_fee: The fee of the order (in satoshis)
-    
-"""
-"""
-database_connection.execute(
-    '''CREATE TABLE IF NOT EXISTS orders (
-        address TEXT,
-        order_id TEXT,
-        order_type TEXT,
-        order_status TEXT,
-        order_created TEXT,
-        order_filled TEXT,
-        order_price REAL,
-        order_quantity REAL,
-        order_market TEXT,
-        order_side TEXT,
-        order_fee REAL,
-        PRIMARY KEY (address, order_id)
-    );''')
-"""
 
 
 # Commit the changes to the database
@@ -377,3 +347,24 @@ def purge_all_session_tokens():
     database_connection.execute("DELETE FROM authentication")
     database_connection.commit()
 
+""" Order management """
+
+def place_order(address, type, side, market, price, quantity, fee):
+    markets.create_new_order(address, type, side, market, price, quantity, fee)
+
+def cancel_order(address, order_id):
+    markets.cancel_order(address, order_id)
+
+def get_open_orders(address):
+    return markets.get_open_orders(address)
+
+def get_cancelled_orders(address):
+    return markets.get_cancelled_orders(address)
+
+def get_account_info(address):
+    cursor = database_connection.execute("SELECT * FROM accounts WHERE address = ?", (address,))
+    row = cursor.fetchone()
+    if row:
+        return json.dumps({description[0]: value for value, description in zip(row, cursor.description)})
+    else:
+        return None
