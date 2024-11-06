@@ -1,35 +1,43 @@
-"""
-
-    accounts.py
+""" accounts.py
 
     For all the functions that handle the accounts data
     Accounts are identified by a public evrmore address provided by the user
 
 """
 
-# We will save all the accounts data into this database
-database_name = "manticore_accounts" 
-
-# Import the get_connection function
-from datetime import datetime, timedelta
+""" Imports"""
+from HelperX import generate_unique_id, read_config_file, create_table
 from Database.get_connection import get_connection
+from datetime import datetime, timedelta
+import json
 import rpc
 
-# Get the connection to the database
+""" Database name 
+    I am calling this database manticore_accounts
+    This is where we will store all the accounts data
+"""
+database_name = "manticore_accounts" 
+
+""" Get the connection to the database """
 database_connection = get_connection(database_name)
 
-# Read the supported assets from the config file
-from HelperX import generate_unique_id, read_config_file, create_table
-import json
+""" Configuration 
+    Read the supported assets from the TradeX.conf file 
+    This will be updated when we add support for more markets
+    This could stay separate from crating new markets but we should sync them
+"""
 config = read_config_file('TradeX.conf')
 supported_assets = json.loads(config["Accounts"]["supported_assets"])
 
+""" Custom exception 
+
+    This exception is raised when an account already exists
+"""
 class AccountExistsException(Exception):
     """ Exception raised for errors in the input salary. """
     pass
 
-""" 
-    Tables in the database
+""" Tables in the database
     Each table has a common primary key, which is the address of the account
     To allow for scaling, we will use multiple tables instead of one big table
     We can add new tables by editing the create_tables function
@@ -42,9 +50,7 @@ class AccountExistsException(Exception):
 
 """
 
-
-""" 
-    Create the accounts table 
+""" Create the accounts table 
 
     address: The public evrmore address of the user
     profile_ipfs: The ipfs hash of the user's profile picture
@@ -61,8 +67,7 @@ database_connection.execute(
         created TEXT
     );''')
 
-"""
-    Create the authentication table
+""" Create the authentication table
 
     address: The public evrmore address of the user
     session_token: The session token for the user
@@ -81,8 +86,7 @@ database_connection.execute(
         session_created TEXT
     );''')
 
-"""
-    Create the addresses table
+""" Create the addresses table
 
     address: The public evrmore address of the user
     **supported assets**
@@ -95,9 +99,7 @@ database_connection.execute(
 
 create_table(database_connection.cursor(), "addresses", supported_assets)
 
-
-"""
-    Create the balances table
+""" Create the balances table
 
     address: The public evrmore address of the user
     **supported assets**
@@ -107,11 +109,10 @@ create_table(database_connection.cursor(), "addresses", supported_assets)
 
     * The balances are all in satoshis (10^-8, the smallest unit of evrmore)
 """
+
 create_table(database_connection.cursor(), "balances", supported_assets)
 
-
-""" 
-    Create the orders table
+""" Create the orders table
 
     address: The public evrmore address of the user
     order_id: The id of the order (unique identifier)
@@ -143,14 +144,10 @@ database_connection.execute(
         PRIMARY KEY (address, order_id)
     );''')
 
-
 # Commit the changes to the database
 database_connection.commit()
 
-
-
-""" 
-    Creating and purging accounts
+""" Creating and purging accounts
 """
 
 """ Initialize a user account """
@@ -284,7 +281,7 @@ def purge_account(address):
     # Commit the changes to the database
     database_connection.commit()
 
-
+""" Purge all accounts """
 def purge_all_accounts():
     
     database_connection.execute("DELETE FROM accounts")
@@ -297,8 +294,7 @@ def purge_all_accounts():
     print("All accounts have been purged")
     
 
-""" 
-    Account table functions
+""" Account table functions
 
     get_profile_ipfs: Get the profile ipfs for an account
     get_birthday: Get the birthday for an account (The date and time the account was created)
@@ -312,8 +308,7 @@ def get_birthday(address):
     return database_connection.execute("SELECT created FROM accounts WHERE address = ?", (address,)).fetchone()[0]
 
 
-""" 
-    Address table functions
+""" Address table functions
 
     get_deposit_address_for_asset: Get the deposit address for an asset
 """
@@ -321,10 +316,10 @@ def get_birthday(address):
 def get_deposit_address_for_asset(address, asset):
     return database_connection.execute(f"SELECT {asset} FROM addresses WHERE address = ?", (address,)).fetchone()[0]
 
-""" 
-    Balances table functions
+""" Balances table functions
 
     get_balance_for_asset: Get the balance for an asset
+    get_all_balances: Get all the balances for an account
 """
 
 def get_balance_for_asset(address, asset):
@@ -335,8 +330,8 @@ def get_all_balances(address):
     columns = [description[1] for description in database_connection.execute("PRAGMA table_info(balances)").fetchall()]
     # Skip the first column (address) in the dictionary comprehension
     return {column: balance for column, balance in zip(columns[1:], balances[0][1:])}
-""" 
-    Orders table functions
+
+""" Orders table functions
 
     add_order: Add an order to the orders table
     get_order_by_id: Get an order by its id
@@ -473,12 +468,14 @@ def purge_all_orders():
         return False
     return True
 
-""" 
-    Authentication table functions
+""" Authentication table functions
 
     set_session_token: Set the session token for an account
     get_session_token: Get the session token for an account
     remove_session_token: Remove the session token for an account
+    validate_session_token: Validate the session token for an account
+    purge_session_token: Remove the session token for an account
+    purge_all_session_tokens: Remove all session tokens
 """
 
 def set_session_token(address, session_token):
@@ -515,34 +512,3 @@ def purge_all_session_tokens():
     database_connection.execute("DELETE FROM authentication")
     database_connection.commit()
 
-
-
-""" Test the functions """
-if __name__ == "__main__":
-    # Test the purge account function
-    try:
-
-        # Try to initialize the account for this random address
-        init_account("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz")
-
-    # If the account already exists, try printing the profile ipfs
-    except AccountExistsException:
-        # Test all the functions
-        #print(get_profile_ipfs("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
-        #print(get_birthday("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
-        #print(get_deposit_address_for_asset("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "evr"))
-        #print(get_balance_for_asset("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "evr"))
-        #print(add_order("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "limit", "bid", "evr/usdm", 10000, 1, 0.1))
-        #print(cancel_order("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "30831f2c-9e6e-48b1-bcb6-a8029398b236"))
-        #print(purge_order("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "30831f2c-9e6e-48b1-bcb6-a8029398b236"))
-        #print(purge_orders("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
-        #print(purge_all_orders())
-        # Test the session token functions  
-        #set_session_token("EVZWQcGh9q9UPmT7t7UfeZs8TsWd3VJmFh", "1234567890")
-        #print(get_session_token("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz"))
-        #remove_session_token("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz")
-        #print(validate_session_token("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz", "1234567890"))
-        # Then purge the account
-        #purge_account("evr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsz")
-        purge_all_accounts()
-        pass
