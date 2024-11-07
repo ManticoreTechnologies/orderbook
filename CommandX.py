@@ -42,7 +42,7 @@ async def get_balance(websocket, client_info, asset):
     """ Balances are stored in the database 
         We need to get the balance from the database and return it to the client
     """
-    balance = accounts.get_balance(client_info['address'], asset)
+    balance = accounts.get_balance_for_asset(client_info['address'], asset)
     return f"balance {asset} {balance}"
     
 
@@ -62,18 +62,18 @@ async def get_all_balances(websocket, client_info):
 @protected
 async def deposit_asset(websocket, client_info, asset, amount):
     """ We are currently on testnet, so we just add the amount to the balance """
-    accounts.deposit_asset(client_info['address'], asset, int(amount))
-    return f"You have deposited {amount} of {asset}. Your new balance is {accounts.get_balance(client_info['address'], asset)}"
+    new_balance = accounts.deposit_asset(client_info['address'], asset, int(amount))
+    return f"deposit_success {asset} {new_balance}"
 
 @on("withdraw_asset")
 @protected
 async def withdraw_asset(websocket, client_info, asset, amount):
     """ We are currently on testnet, so we just subtract the amount from the balance """
     try:
-        accounts.withdraw_asset(client_info['address'], asset, int(amount))
-        return f"You have withdrawn {amount} of {asset}. Your new balance is {accounts.get_balance(client_info['address'], asset)}"
+        new_balance = accounts.withdraw_asset(client_info['address'], asset, int(amount))
+        return f"withdraw_success {asset} {new_balance}"
     except Exception as e:
-        return f"Error withdrawing {amount} of {asset}: {e}"
+        return f"withdraw_error {e}"
 
 @on("cancel_order")
 @protected

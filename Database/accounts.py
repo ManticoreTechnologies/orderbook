@@ -368,3 +368,16 @@ def get_account_info(address):
         return json.dumps({description[0]: value for value, description in zip(row, cursor.description)})
     else:
         return None
+
+""" Deposit and Withdrawal functions """
+
+def deposit_asset(address, asset, amount):
+    """ While on testnet, we just add the amount to the balance """
+    database_connection.execute(f"UPDATE balances SET {asset} = {asset} + ? WHERE address = ?", (amount, address))
+    database_connection.commit()
+    return get_balance_for_asset(address, asset)
+def withdraw_asset(address, asset, amount):
+    """ While on testnet, we just subtract the amount from the balance """  
+    database_connection.execute(f"UPDATE balances SET {asset} = {asset} - ? WHERE address = ?", (amount, address))
+    database_connection.commit()
+    return get_balance_for_asset(address, asset)
