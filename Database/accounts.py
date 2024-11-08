@@ -373,11 +373,12 @@ def get_account_info(address):
 
 def deposit_asset(address, asset, amount):
     """ While on testnet, we just add the amount to the balance """
-    database_connection.execute(f"UPDATE balances SET {asset} = {asset} + ? WHERE address = ?", (amount, address))
+    database_connection.execute(f"UPDATE balances SET {asset} = COALESCE({asset}, 0) + ? WHERE address = ?", (amount, address))
     database_connection.commit()
     return get_balance_for_asset(address, asset)
+
 def withdraw_asset(address, asset, amount):
     """ While on testnet, we just subtract the amount from the balance """  
-    database_connection.execute(f"UPDATE balances SET {asset} = {asset} - ? WHERE address = ?", (amount, address))
+    database_connection.execute(f"UPDATE balances SET {asset} = COALESCE({asset}, 0) - ? WHERE address = ?", (amount, address))
     database_connection.commit()
     return get_balance_for_asset(address, asset)
