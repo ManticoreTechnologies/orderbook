@@ -99,5 +99,22 @@ async def get_account_info(websocket, client_info):
     return f"account_info {accounts.get_account_info(client_info['address'])}"
 
 
+@on("get_favorite_markets")
+@protected
+async def get_favorite_markets(websocket, client_info):
+    return f"favorite_markets {accounts.get_favorite_markets(client_info['address'])}"
+
+@on("favorite_market")
+@protected
+async def favorite_market(websocket, client_info, market_name):
+    accounts.favorite_market(client_info['address'], market_name)
+    return f"favorite_markets {accounts.get_favorite_markets(client_info['address'])}"
+
+@on("unfavorite_market")
+@protected
+async def unfavorite_market(websocket, client_info, market_name):
+    accounts.unfavorite_market(client_info['address'], market_name)
+    return f"favorite_markets {accounts.get_favorite_markets(client_info['address'])}"
+
 # TODO: Add commands for creating and managing orders
 # TODO: Add commands for getting market data

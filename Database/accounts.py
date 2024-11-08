@@ -69,15 +69,6 @@ database_connection.execute(
         favorite_markets TEXT
     );''')
 
-# Check if the 'favorite_markets' column exists
-columns = database_connection.execute("PRAGMA table_info(accounts)").fetchall()
-column_names = [column[1] for column in columns]
-
-if 'favorite_markets' not in column_names:
-    # Add the 'favorite_markets' column if it doesn't exist
-    database_connection.execute("ALTER TABLE accounts ADD COLUMN favorite_markets TEXT;")
-
-
 """ Create the authentication table
 
     address: The public evrmore address of the user
@@ -392,3 +383,37 @@ def withdraw_asset(address, asset, amount):
     database_connection.execute(f"UPDATE balances SET {asset} = COALESCE({asset}, 0) - ? WHERE address = ?", (amount, address))
     database_connection.commit()
     return get_balance_for_asset(address, asset)
+
+def get_favorite_markets(address):
+    return database_connection.execute("SELECT favorite_markets FROM accounts WHERE address = ?", (address,)).fetchone()[0]
+
+def favorite_market(address, market_name):
+    existing_markets = database_connection.execute("SELECT favorite_markets FROM accounts WHERE address = ?", (address,)).fetchone()[0]
+    if existing_markets:
+        markets_list = json.loads(existing_markets)
+        if market_name not in markets_list:
+            markets_list.append(market_name)
+            updated_markets = json.dumps(markets_list)
+            database_connection.execute("UPDATE accounts SET favorite_markets = ? WHERE address = ?", (updated_markets, address))
+    else:
+        database_connection.execute("UPDATE accounts SET favorite_markets = ? WHERE address = ?", (json.dumps([market_name]), address))
+    database_connection.commit()
+
+def unfavorite_market(address, market_name):
+    try:
+        existing_markets = database_connection.execute("SELECT favorite_markets FROM accounts WHERE address = ?", (address,)).fetchone()[0]
+        if existing_markets:
+            markets_list = json.loads(existing_markets)
+            if market_name in markets_list:
+                markets_list.remove(market_name)
+                updated_markets = json.dumps(markets_list)
+                database_connection.execute("UPDATE accounts SET favorite_markets = ? WHERE address = ?", (updated_markets, address))
+                database_connection.commit()
+                print(f"Market {market_name} has been removed from the favorite markets for address {address}.")
+            else:
+                print(f"Market {market_name} is not in the favorite markets for address {address}.")
+        else:
+            print(f"No favorite markets found for address {address}.")
+    except Exception as e:
+        print(f"An error occurred while trying to unfavorite market {market_name} for address {address}: {e}")
+        database_connection.rollback()
