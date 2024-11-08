@@ -65,8 +65,18 @@ database_connection.execute(
     '''CREATE TABLE IF NOT EXISTS accounts (
         address TEXT PRIMARY KEY,
         profile_ipfs TEXT,
-        created TEXT
+        created TEXT,
+        favorite_markets TEXT
     );''')
+
+# Check if the 'favorite_markets' column exists
+columns = database_connection.execute("PRAGMA table_info(accounts)").fetchall()
+column_names = [column[1] for column in columns]
+
+if 'favorite_markets' not in column_names:
+    # Add the 'favorite_markets' column if it doesn't exist
+    database_connection.execute("ALTER TABLE accounts ADD COLUMN favorite_markets TEXT;")
+
 
 """ Create the authentication table
 

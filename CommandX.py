@@ -98,5 +98,6 @@ async def get_cancelled_orders(websocket, client_info):
 async def get_account_info(websocket, client_info):
     return f"account_info {accounts.get_account_info(client_info['address'])}"
 
+
 # TODO: Add commands for creating and managing orders
 # TODO: Add commands for getting market data
