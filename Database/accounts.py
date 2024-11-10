@@ -69,25 +69,11 @@ database_connection.execute(
         favorite_markets TEXT,
         bio TEXT,
         friendly_name TEXT,
+        user_id TEXT,
         trading_volume TEXT,
-        status TEXT
+        status TEXT,
+        favorite_assets TEXT
     );''')
-
-# Check and add columns if they don't exist
-def add_column_if_not_exists(table_name, column_name, column_type):
-    try:
-        database_connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
-    except Exception as e:
-        if "duplicate column name" not in str(e).lower():
-            raise
-
-# Add new columns to the accounts table if they don't exist
-add_column_if_not_exists("accounts", "favorite_markets", "TEXT")
-add_column_if_not_exists("accounts", "bio", "TEXT")
-add_column_if_not_exists("accounts", "friendly_name", "TEXT")
-add_column_if_not_exists("accounts", "trading_volume", "TEXT")
-add_column_if_not_exists("accounts", "status", "TEXT")
-
 
 """ Create the authentication table
 
@@ -235,6 +221,22 @@ def init_account(address):
 
     # Dont touch the orders table, it holds all orders for any account
     # Orders will be selected by the address and/or order_id
+
+    """ Initialize the profile information """
+    rowid = database_connection.execute("SELECT ROWID FROM accounts WHERE address = ?", (address,)).fetchone()[0]
+    friendly_name = f"Manticore_User#{rowid}"
+    bio = f"Hello, I am {friendly_name}"
+    trading_volume = "0"
+    status = "online"
+    favorite_assets = "[\"evr\", \"inferna\"]"
+
+    set_profile_ipfs(address, profile_ipfs)
+    set_bio(address, bio)
+    set_friendly_name(address, friendly_name)
+    set_trading_volume(address, trading_volume)
+    set_status(address, status)
+    set_favorite_assets(address, favorite_assets)
+    set_user_id(address, friendly_name)
 
     """ Any other initializations if needed """
     # none needed at this time
@@ -462,3 +464,10 @@ def set_status(address, status):
     database_connection.execute("UPDATE accounts SET status = ? WHERE address = ?", (status, address))
     database_connection.commit()
 
+def set_favorite_assets(address, favorite_assets):
+    database_connection.execute("UPDATE accounts SET favorite_assets = ? WHERE address = ?", (favorite_assets, address))
+    database_connection.commit()
+
+def set_user_id(address, user_id):
+    database_connection.execute("UPDATE accounts SET user_id = ? WHERE address = ?", (user_id, address))
+    database_connection.commit()
