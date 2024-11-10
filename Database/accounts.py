@@ -437,3 +437,28 @@ def unfavorite_market(address, market_name):
     except Exception as e:
         print(f"An error occurred while trying to unfavorite market {market_name} for address {address}: {e}")
         database_connection.rollback()
+
+
+""" Profile management """
+
+def set_profile_ipfs(address, profile_ipfs):
+    database_connection.execute("UPDATE accounts SET profile_ipfs = ? WHERE address = ?", (profile_ipfs, address))
+    database_connection.commit()
+
+def set_bio(address, bio):
+    database_connection.execute("UPDATE accounts SET bio = ? WHERE address = ?", (bio, address))
+    database_connection.commit()
+
+
+def set_friendly_name(address, friendly_name):
+    database_connection.execute("UPDATE accounts SET friendly_name = ? WHERE address = ?", (friendly_name, address))
+    database_connection.commit()
+
+def set_trading_volume(address, trading_volume):
+    database_connection.execute("UPDATE accounts SET trading_volume = ? WHERE address = ?", (trading_volume, address))
+    database_connection.commit()
+
+def set_status(address, status):
+    database_connection.execute("UPDATE accounts SET status = ? WHERE address = ?", (status, address))
+    database_connection.commit()
+

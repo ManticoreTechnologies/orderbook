@@ -118,3 +118,35 @@ async def unfavorite_market(websocket, client_info, market_name):
 
 # TODO: Add commands for creating and managing orders
 # TODO: Add commands for getting market data
+
+
+""" Managing Profile """
+@on("set_friendly_name")
+@protected
+async def set_friendly_name(websocket, client_info, friendly_name):
+    accounts.set_friendly_name(client_info['address'], friendly_name)
+    return f"friendly_name {friendly_name}"
+
+@on("set_bio")
+@protected
+async def set_bio(websocket, client_info, bio):
+    accounts.set_bio(client_info['address'], bio)
+    return f"bio {bio}"
+
+@on("set_trading_volume")
+@protected
+async def set_trading_volume(websocket, client_info, trading_volume):
+    accounts.set_trading_volume(client_info['address'], trading_volume)
+    return f"trading_volume {trading_volume}"
+
+@on("set_status")
+@protected
+async def set_status(websocket, client_info, status):
+    accounts.set_status(client_info['address'], status)
+    return f"status {status}"
+
+@on("set_profile_ipfs")
+@protected
+async def set_profile_ipfs(websocket, client_info, profile_ipfs):
+    accounts.set_profile_ipfs(client_info['address'], profile_ipfs)
+    return f"profile_ipfs {profile_ipfs}"
