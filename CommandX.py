@@ -150,3 +150,9 @@ async def set_status(websocket, client_info, status):
 async def set_profile_ipfs(websocket, client_info, profile_ipfs):
     accounts.set_profile_ipfs(client_info['address'], profile_ipfs)
     return f"profile_ipfs {profile_ipfs}"
+
+@on("set_favorite_assets")
+@protected
+async def set_favorite_assets(websocket, client_info, favorite_assets):
+    accounts.set_favorite_assets(client_info['address'], favorite_assets)
+    return f"favorite_assets {favorite_assets}"
