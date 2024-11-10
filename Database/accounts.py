@@ -66,8 +66,28 @@ database_connection.execute(
         address TEXT PRIMARY KEY,
         profile_ipfs TEXT,
         created TEXT,
-        favorite_markets TEXT
+        favorite_markets TEXT,
+        bio TEXT,
+        friendly_name TEXT,
+        trading_volume TEXT,
+        status TEXT
     );''')
+
+# Check and add columns if they don't exist
+def add_column_if_not_exists(table_name, column_name, column_type):
+    try:
+        database_connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+    except Exception as e:
+        if "duplicate column name" not in str(e).lower():
+            raise
+
+# Add new columns to the accounts table if they don't exist
+add_column_if_not_exists("accounts", "favorite_markets", "TEXT")
+add_column_if_not_exists("accounts", "bio", "TEXT")
+add_column_if_not_exists("accounts", "friendly_name", "TEXT")
+add_column_if_not_exists("accounts", "trading_volume", "TEXT")
+add_column_if_not_exists("accounts", "status", "TEXT")
+
 
 """ Create the authentication table
 
