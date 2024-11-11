@@ -14,6 +14,8 @@ import secrets
 
 from rpc import verify_message
 
+import inspect
+
 # Dictionary to store event handlers
 event_handlers = {}
 
@@ -116,21 +118,22 @@ def get_client_info_field(websocket, field):
     return client_info.get(field, None)
 
 def protected(func):
-    # Decorator to make a command protected
     async def wrapper(websocket, *args, **kwargs):
-        # Check if the websocket is in the clients_info dictionary
+        # Check if the websocket is authenticated
         try:
             client_info = clients_info[websocket]
+            if not client_info.get("authenticated", False):
+                return await asyncio.sleep(0, result="You are not authenticated. Please authenticate yourself with the 'auth' command.")
         except KeyError:
             return "You are not authenticated. Please authenticate yourself with the 'auth' command."
 
-        # Check if the client is authenticated
-        if not client_info.get("authenticated", False):
-            # Return a coroutine that yields the error message
-            return await asyncio.sleep(0, result="You are not authenticated. Please authenticate yourself with the 'auth' command.")
+        # Get the expected argument names for the function (excluding 'websocket' and 'client_info')
+        expected_args = inspect.signature(func).parameters
+        required_args = list(expected_args.keys())[2:]  # Skip 'websocket' and 'client_info'
 
-        # Call the original function if authenticated
-        return await func(websocket, client_info, *args, **kwargs)
+        # Pass only the required arguments to the function
+        filtered_args = args[:len(required_args)]
+        return await func(websocket, client_info, *filtered_args, **kwargs)
     return wrapper
 
 def onclose(websocket):

@@ -130,8 +130,11 @@ async def set_friendly_name(websocket, client_info, friendly_name):
 @on("set_bio")
 @protected
 async def set_bio(websocket, client_info, bio):
-    accounts.set_bio(client_info['address'], bio)
+    address = client_info['address']
+    print(f"Updating bio for address {address} to: {bio}")
+    accounts.set_bio(address, bio)
     return f"bio {bio}"
+
 
 @on("set_trading_volume")
 @protected
@@ -148,6 +151,7 @@ async def set_status(websocket, client_info, status):
 @on("set_profile_ipfs")
 @protected
 async def set_profile_ipfs(websocket, client_info, profile_ipfs):
+<<<<<<< HEAD
     accounts.set_profile_ipfs(client_info['address'], profile_ipfs)
     return f"profile_ipfs {profile_ipfs}"
 
@@ -156,3 +160,9 @@ async def set_profile_ipfs(websocket, client_info, profile_ipfs):
 async def set_favorite_assets(websocket, client_info, favorite_assets):
     accounts.set_favorite_assets(client_info['address'], favorite_assets)
     return f"favorite_assets {favorite_assets}"
+=======
+    address = client_info['address']
+    print(f"Updating profile IPFS for address {address} to: {profile_ipfs}")
+    accounts.set_profile_ipfs(address, profile_ipfs)
+    return f"profile_ipfs {profile_ipfs}"
+>>>>>>> 8c35199 (update wrapper for protected methods)
