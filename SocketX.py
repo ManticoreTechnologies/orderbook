@@ -143,7 +143,7 @@ def onclose(websocket):
 
 # This will be the websocket server for all of TradeX
 # It will be used to send and receive messages from the TradeX clients
-async def hello(websocket, path):
+async def hello(websocket):
     try:
         while True:
             message = await websocket.recv()
