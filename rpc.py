@@ -8,7 +8,9 @@ server = jsonrpclib.Server(f'http://{config["RPC"]["rpc_user"]}:{config["RPC"]["
 # Make verifymessage method with error handling
 def verify_message(address, signature, message):
     try:
-        return server.verifymessage(address, signature, message)
+        response = server.verifymessage(address, signature, message)
+        print(response)
+        return response
     except jsonrpclib.jsonrpc.ProtocolError:
         return False
     except Exception:

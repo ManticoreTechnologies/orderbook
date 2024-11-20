@@ -22,6 +22,10 @@ event_handlers = {}
 # Dictionary to store client information
 clients_info = {}
 
+async def broadcast(message):
+    for websocket in clients_info.keys():
+        await websocket.send(message)
+
 # Decorator to register an event handler
 def on(event_name):
     """Decorator to register an event handler."""
@@ -92,7 +96,8 @@ async def authorize_challenge(websocket, signature):
 def add_client(websocket, client_info):
     clients_info[websocket] = client_info
 
-    
+
+
 def get_client_info(websocket):
     return clients_info.get(websocket, None)
 def remove_client(websocket):
@@ -143,6 +148,8 @@ def onclose(websocket):
 
 # This will be the websocket server for all of TradeX
 # It will be used to send and receive messages from the TradeX clients
+import shlex
+
 async def hello(websocket):
     try:
         while True:
@@ -150,14 +157,14 @@ async def hello(websocket):
             if message != "ping":
                 log_received(f"Received message: {message}")
 
-            # Split the message into command and arguments
-            parts = message.split()
+            # Use shlex to split the message into command and arguments
+            parts = shlex.split(message)
             command = parts[0]
             args = parts[1:]
 
             # Check if there's a registered handler for the command
             if command in event_handlers:
-                    # Pass the arguments to the handler
+                # Pass the arguments to the handler
                 response = await event_handlers[command](websocket, *args)
                 await websocket.send(response)
                 if response != "pong":

@@ -2,8 +2,8 @@ import asyncio
 import time
 import random
 from websocket_server import WebSocketServer
-from orderbook import OrderBook
-from order_utils import generate_random_order
+from archive.orderbook import OrderBook
+from archive.order_utils import generate_random_order
 from message_handler import process_message
 from user_utils import register_simulation_users
 # TODO: Add RPC script for calling verifymessage

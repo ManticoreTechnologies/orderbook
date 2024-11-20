@@ -12,7 +12,7 @@ supported_assets = ["usdc", "evr", "inferna", "usdt", "usdm"]
 from Database.accounts import get_deposit_addresses, get_deposit_txids, get_wallet, save_deposit_txid
 from Database.get_connection import get_connection
 from WalletX import get_usdc_balance
-from cbrpc import get_transaction, get_transaction_receipt
+from archive.cbrpc import get_transaction, get_transaction_receipt
 import rpc
 
 # Define the database name

@@ -1,6 +1,7 @@
 # Import the on decorator from SocketX
-from Database import accounts, markets
-from SocketX import get_client_info, get_client_info_field, on, protected, update_client_info_field
+import json
+from Database import accounts, markets, assets
+from SocketX import get_client_info, get_client_info_field, on, protected, update_client_info_field, broadcast
 
 """ Here we define the commands that the server will handle 
     Each command is a function that takes a websocket and returns a response
@@ -163,3 +164,38 @@ async def set_favorite_assets(websocket, client_info, favorite_assets):
     print(f"Updating profile IPFS for address {address} to: {profile_ipfs}")
     accounts.set_profile_ipfs(address, profile_ipfs)
     return f"profile_ipfs {profile_ipfs}"
+
+# Get comments from the database, for a given asset. This is just for assets, NOT for user profiles
+@on("get_asset_comments")
+@protected
+async def get_asset_comments(websocket, client_info, asset):
+    comments = assets.get_asset_comments(asset)
+    return f"asset_comments {comments}"
+
+@on("add_asset_comment")
+@protected
+async def add_asset_comment(websocket, client_info, asset, address, comment):
+    full_comment = assets.add_asset_comment(asset, address, comment)
+    return_message = f"asset_comment_added {json.dumps(full_comment)}"
+    await broadcast(return_message)
+    return return_message
+
+@on("update_asset_comment")
+@protected
+async def update_asset_comment(websocket, client_info, asset, comment_id, comment):
+    assets.update_asset_comment(asset, comment_id, comment)
+    return_message = f"asset_comment_updated {comment_id}"
+    await broadcast(return_message)
+    return return_message
+
+@on("delete_asset_comment")
+@protected
+async def delete_asset_comment(websocket, client_info, comment_id):
+    assets.delete_asset_comment(comment_id)
+    return_message = f"asset_comment_deleted {comment_id}"
+    await broadcast(return_message)
+    return return_message
+
+
+
+
