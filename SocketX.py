@@ -181,7 +181,7 @@ async def hello(websocket):
 async def start_server():
     """Start the WebSocket server."""
     start_server = await websockets.serve(hello, "localhost", 8765)
-    logger.info("WebSocket server started on ws://localhost:8765")
+    logger.info("WebSocket server started on localhost:8765")
     await start_server.wait_closed()
 
 def run_server():

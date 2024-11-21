@@ -86,8 +86,9 @@ class TradeXClient:
 
 
 from rpc import sign_message
+
 async def main():
-    client = TradeXClient("ws://localhost:8765")
+    client = TradeXClient("wss://ws.manticore.exchange")
     await client.connect()
 
     client_name = "Phoenix"

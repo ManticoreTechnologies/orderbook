@@ -1,43 +1,44 @@
-import jsonrpclib
+import requests
 from HelperX import read_config_file
 
 # Connect to local RPC at port 8819 with credentials
 config = read_config_file('TradeX.conf')
-server = jsonrpclib.Server(f'http://{config["RPC"]["rpc_user"]}:{config["RPC"]["rpc_password"]}@localhost:{config["RPC"]["rpc_port"]}')
+auth = (config["RPC"]["rpc_user"], config["RPC"]["rpc_password"])
+url = f'http://localhost:{config["RPC"]["rpc_port"]}'
 
 # Make verifymessage method with error handling
 def verify_message(address, signature, message):
     try:
-        response = server.verifymessage(address, signature, message)
-        print(response)
-        return response
-    except jsonrpclib.jsonrpc.ProtocolError:
-        return False
-    except Exception:
+        response = requests.post(url, auth=auth, json={"method": "verifymessage", "params": [address, signature, message]})
+        response.raise_for_status()
+        print(response.json())
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"RequestException: {e}")
         return False
 
 def sign_message(address, message):
     try:
-        return server.signmessage(address, message)
-    except jsonrpclib.jsonrpc.ProtocolError:
-        return False
-    except Exception:
+        response = requests.post(url, auth=auth, json={"method": "signmessage", "params": [address, message]})
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException:
         return False
     
 def get_new_address():
     try:
-        return server.getnewaddress()
-    except jsonrpclib.jsonrpc.ProtocolError:
-        return False
-    except Exception:
+        response = requests.post(url, auth=auth, json={"method": "getnewaddress"})
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException:
         return False
     
 def get_balance(address):
     try:
-        return server.getaddressbalance(address)
-    except jsonrpclib.jsonrpc.ProtocolError:
-        return False
-    except Exception:
+        response = requests.post(url, auth=auth, json={"method": "getaddressbalance", "params": [address]})
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException:
         return False
 
 if __name__ == "__main__":

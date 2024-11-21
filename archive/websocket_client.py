@@ -5,7 +5,7 @@ import rpc
 
 
 async def authenticate_and_listen():
-    uri = "ws://localhost:8765"
+    uri = "wss://ws.manticore.exchange"
     async with websockets.connect(uri) as websocket:
         # Receive nonce from server
         nonce_message = await websocket.recv()
@@ -32,7 +32,7 @@ async def authenticate_and_listen():
 
 
 async def test_basic_connection():
-    uri = "ws://localhost:8765"
+    uri = "wss://ws.manticore.exchange"
     async with websockets.connect(uri) as websocket:
         print("Connected to the WebSocket server")
 
