@@ -11,8 +11,7 @@ def verify_message(address, signature, message):
     try:
         response = requests.post(url, auth=auth, json={"method": "verifymessage", "params": [address, signature, message]})
         response.raise_for_status()
-        print(response.json())
-        return response.json()
+        return response.json()['result']
     except requests.exceptions.RequestException as e:
         print(f"RequestException: {e}")
         return False
@@ -21,24 +20,27 @@ def sign_message(address, message):
     try:
         response = requests.post(url, auth=auth, json={"method": "signmessage", "params": [address, message]})
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException:
+        return response.json()['result']
+    except requests.exceptions.RequestException as e:
+        print(f"RequestException: {e}")
         return False
     
 def get_new_address():
     try:
         response = requests.post(url, auth=auth, json={"method": "getnewaddress"})
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException:
+        return response.json()['result']
+    except requests.exceptions.RequestException as e:
+        print(f"RequestException: {e}")
         return False
     
 def get_balance(address):
     try:
         response = requests.post(url, auth=auth, json={"method": "getaddressbalance", "params": [address]})
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException:
+        return response.json().result
+    except requests.exceptions.RequestException as e:
+        print(f"RequestException: {e}")
         return False
 
 if __name__ == "__main__":

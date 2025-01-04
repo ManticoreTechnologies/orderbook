@@ -110,6 +110,18 @@ def delete_asset_comment(comment_id):
     database_connection.commit()
     return "success"
 
+def get_townhall_comments():
+    return get_asset_comments("townhall")
+
+def add_townhall_comment(address, text):
+    return add_asset_comment("townhall", address, text)
+
+def update_townhall_comment(comment_id, text):
+    update_asset_comment(comment_id, text)
+
+def delete_townhall_comment(comment_id):
+    delete_asset_comment(comment_id)
+
 
 # database_connection.execute(
 #     '''CREATE TABLE IF NOT EXISTS authentication (

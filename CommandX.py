@@ -1,7 +1,7 @@
 # Import the on decorator from SocketX
 import json
 from Database import accounts, markets, assets
-from SocketX import get_client_info, get_client_info_field, on, protected, update_client_info_field, broadcast
+from SocketX import broadcast_to_subscribers, get_client_info, get_client_info_field, on, protected, update_client_info_field, broadcast
 
 """ Here we define the commands that the server will handle 
     Each command is a function that takes a websocket and returns a response
@@ -196,6 +196,60 @@ async def delete_asset_comment(websocket, client_info, comment_id):
     await broadcast(return_message)
     return return_message
 
+
+
+
+@on("get_townhall_comments")
+@protected
+async def get_townhall_comments(websocket, client_info):
+    comments = assets.get_townhall_comments()
+    return_message = f"townhall_comments {json.dumps(comments)}"
+    await broadcast(return_message)
+    return return_message
+
+@on("add_townhall_comment")
+@protected
+async def add_townhall_comment(websocket, client_info, address, comment):
+    full_comment = assets.add_townhall_comment(address, comment)
+    return_message = f"townhall_comment_added {json.dumps(full_comment)}"
+    await broadcast(return_message)
+    return return_message
+
+@on("update_townhall_comment")
+@protected
+async def update_townhall_comment(websocket, client_info, comment_id, comment):
+    assets.update_townhall_comment(comment_id, comment)
+    return_message = f"townhall_comment_updated {comment_id}"
+    await broadcast(return_message)
+    return return_message
+
+@on("delete_townhall_comment")
+@protected
+async def delete_townhall_comment(websocket, client_info, comment_id):
+    assets.delete_townhall_comment(comment_id)
+    return_message = f"townhall_comment_deleted {comment_id}"
+    await broadcast(return_message)
+    return return_message
+
+
+
+# Broadcast a message to all clients connected to the websocket
+@on("broadcast_townhall_message")
+@protected
+async def broadcast_townhall_message(websocket, client_info, message):
+    # Get the account of the address that sent the message
+    address = client_info['address']
+    account = json.loads(accounts.get_account_info(address))
+
+    townhall_message = {
+        "address": address,
+        "friendly_name": account['friendly_name'],
+        "ipfs": account['profile_ipfs'],
+        "message": message
+    }
+
+    await broadcast_to_subscribers("townhall_message", f"townhall_message {json.dumps(townhall_message)}")
+    return f"townhall_message {json.dumps(townhall_message)}"
 
 
 

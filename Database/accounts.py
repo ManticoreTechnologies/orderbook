@@ -188,16 +188,18 @@ def init_account(address):
 
     # Create a new evrmore deposit address for the user, this is also used for all other assets on the evrmore blockchain
     evr_deposit_address = rpc.get_new_address()
-
+    try:
     # Create the query using loop then execute full query
-    query = "INSERT INTO addresses (address"
-    for asset in supported_assets:
-        query += f", {asset}"
-    query += ") VALUES (?, "
-    for _ in supported_assets:
-        query += "?, "
-    query = query.rstrip(", ") + ");"
-    database_connection.execute(query, (address, *([evr_deposit_address] * len(supported_assets))))
+        query = "INSERT INTO addresses (address"
+        for asset in supported_assets:
+            query += f", {asset}"
+        query += ") VALUES (?, "
+        for _ in supported_assets:
+            query += "?, "
+        query = query.rstrip(", ") + ");"
+        database_connection.execute(query, (address, *([evr_deposit_address] * len(supported_assets))))
+    except Exception as e:
+        print(f"Error creating addresses table: {e}")
 
     """ balances table """
 

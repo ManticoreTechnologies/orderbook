@@ -22,6 +22,9 @@ event_handlers = {}
 # Dictionary to store client information
 clients_info = {}
 
+# Dictionary to store subscriptions
+subscriptions = {}
+
 async def broadcast(message):
     for websocket in clients_info.keys():
         await websocket.send(message)
@@ -144,6 +147,10 @@ def protected(func):
 def onclose(websocket):
     """Handle the closing of a WebSocket connection."""
     logger.info(f"Connection closed for client: {id(websocket)}")
+    # Remove the client from all subscriptions
+    for event_name in list(subscriptions.keys()):
+        unsubscribe(websocket, event_name)
+    # Remove the client from the clients_info dictionary
     remove_client(websocket)
 
 # This will be the websocket server for all of TradeX
@@ -192,6 +199,37 @@ def run_server():
         logger.info("Server stopped manually")
     except Exception as e:
         logger.error(f"Server error: {e}")
+
+def subscribe(websocket, event_name):
+    """Subscribe a websocket to an event."""
+    if event_name not in subscriptions:
+        subscriptions[event_name] = set()
+    subscriptions[event_name].add(websocket)
+
+def unsubscribe(websocket, event_name):
+    """Unsubscribe a websocket from an event."""
+    if event_name in subscriptions:
+        subscriptions[event_name].discard(websocket)
+        if not subscriptions[event_name]:  # Remove the event if no subscribers left
+            del subscriptions[event_name]
+
+async def broadcast_to_subscribers(event_name, message):
+    """Broadcast a message to all subscribers of a specific event."""
+    if event_name in subscriptions:
+        for websocket in subscriptions[event_name]:
+            await websocket.send(message)
+
+@on("subscribe")
+async def handle_subscribe(websocket, event_name):
+    """Handle subscription requests."""
+    subscribe(websocket, event_name)
+    return f"Subscribed to {event_name}"
+
+@on("unsubscribe")
+async def handle_unsubscribe(websocket, event_name):
+    """Handle unsubscription requests."""
+    unsubscribe(websocket, event_name)
+    return f"Unsubscribed from {event_name}"
 
 if __name__ == "__main__":
     run_server()
