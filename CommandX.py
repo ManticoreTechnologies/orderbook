@@ -1,6 +1,7 @@
 # Import the on decorator from SocketX
 import json
 from Database import accounts, markets, assets
+from rpc import get_asset_data
 from SocketX import broadcast_to_subscribers, get_client_info, get_client_info_field, on, protected, update_client_info_field, broadcast
 
 """ Here we define the commands that the server will handle 
@@ -28,6 +29,12 @@ async def get_market_info(websocket, market_name):
 async def get_orderbook(websocket, market_name):
     print(f"Fetching orderbook for {market_name}")
     return f"orderbook {markets.get_orderbook(market_name)}"
+
+@on("get_asset_info")
+async def get_asset_info(websocket, assets):
+    """ Assets is list of asset names separated by commas """
+    asset_data = get_asset_data(assets)
+    return f"asset_info {json.dumps(asset_data)}"
 
 """ 
     The following commands are protected and focus on interacting with user accounts

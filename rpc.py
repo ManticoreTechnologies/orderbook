@@ -43,5 +43,31 @@ def get_balance(address):
         print(f"RequestException: {e}")
         return False
 
+def get_asset_data(assets):
+    assets = assets.upper()
+    assets = assets.split(",")
+    asset_data = []
+
+    for asset in assets:        
+        if asset == "EVR":
+            asset_data.append({
+                "name": "EVR",
+                "amount": 21000000000.0,
+                "units": 8,
+                "reissuable": 0,
+                "has_ipfs": 0
+            })
+        else:
+            try:
+                response = requests.post(url, auth=auth, json={"method": "getassetdata", "params": [asset]})
+                response.raise_for_status()
+                asset_data.append(response.json()['result'])
+            except requests.exceptions.RequestException as e:
+                print(f"RequestException: {e}")
+                return False
+            
+    asset_data = {asset_data[i]['name']: asset_data[i] for i in range(len(asset_data))}
+    return asset_data
+
 if __name__ == "__main__":
     print(verify_message("EdsY3uu7tteVKCr7FdkrWs26t75LBwy4wQ", "IJj0ts/lK0TPUmSO7RBshfYkC+qyZnFFcrMqnj9ggI+8LS5QQ2zcwaqgM3WtN1G0JOssT3OorzAgaFQHnT3AN/8=", "message"))
